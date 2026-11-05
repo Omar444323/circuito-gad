@@ -17,3 +17,4 @@ Decisiones tomadas donde el documento y el prototipo no coincidían o el documen
 13. **Plazo del proveedor.** Los tres plazos con protocolo de bloqueo (responder, entregar y corregir) son del proveedor, así que el comprador es siempre el equipo afectado. La revisión de factura no tiene plazo porque tampoco lo tiene en el prototipo.
 14. **Descripción de las líneas de factura.** Quien emite puede cambiar unidades y precios, porque equivocarse forma parte del aprendizaje, pero la descripción sale del pedido.
 15. **Trazabilidad del banco.** El banco solo ve órdenes y movimientos. No ve pedidos, facturas ni historial de operaciones ajenas.
+16. **Variables en Preview.** Para poder probar antes de fusionar, NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY y SUPABASE_SERVICE_ROLE_KEY también están en Preview. Las previews usan la base de datos real: lo que se pruebe en ellas queda en los datos y consume numeración.

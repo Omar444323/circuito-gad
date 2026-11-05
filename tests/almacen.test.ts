@@ -157,7 +157,7 @@ describe("casos numéricos obligatorios", () => {
     expect(Number(fv[fv.length - 1].entrada_precio)).toBe(8);
   });
   it("a transferir 5.887,86 más 1,50 de comisión", async () => {
-    const [r] = await acto(U.g2, "select public.ordenar_pago($1, false) id", [p]);
+    const [r] = await acto(U.g2, "select public.ordenar_pago($1, true) id", [p]);
     o = Number(r.id);
     const [x] = await acto(U.g5, "select importe, comision from public.ordenes_pago where id = $1", [o]);
     expect(Number(x.importe)).toBe(5887.86);

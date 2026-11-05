@@ -330,4 +330,17 @@ describe("correo entre empresas", () => {
     const [ajena] = (await db.query<{ id: string }>("select id from public.pedidos where comprador_id = 3 limit 1")).rows;
     await expect(acto(U.g1, "select public.enviar_correo(4::smallint, 'x', 'y', null, $1)", [ajena.id])).rejects.toThrow(/no es entre estas dos/);
   });
+  it("la profesora ve los correos de todas las empresas; una empresa, solo los suyos", async () => {
+    await acto(U.g3, "select public.enviar_correo(4::smallint, 'Servicio', 'Hola G4')");
+    await acto(U.g5, "select public.enviar_correo(6::smallint, 'Cuenta', 'Hola G6')");
+    const pares = await acto(U.prof, "select distinct remitente_id, destinatario_id from public.correos");
+    const claves = pares.map((p) => p.remitente_id + "-" + p.destinatario_id);
+    expect(claves).toEqual(expect.arrayContaining(["1-2", "3-4", "5-6"]));
+    const [{ total }] = (await db.query<{ total: number }>("select count(*)::int total from public.correos")).rows;
+    expect(await acto(U.prof, "select id from public.correos")).toHaveLength(total);
+    const delG3 = await acto(U.g3, "select remitente_id, destinatario_id from public.correos");
+    expect(delG3.length).toBeGreaterThan(0);
+    for (const c of delG3) expect([c.remitente_id, c.destinatario_id]).toContain(3);
+    expect(await acto(U.g1, "select id from public.correos where remitente_id = 5")).toHaveLength(0);
+  });
 });

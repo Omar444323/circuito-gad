@@ -124,3 +124,9 @@ export async function enviarCorreo(_: Res, f: FormData): Promise<Res> {
   revalidatePath("/", "layout");
   redirect("/correo/" + data);
 }
+export async function marcarCorreosLeidos(ids: number[]) {
+  const s = await sb();
+  // La función de Postgres solo marca los correos cuya destinataria es la empresa de quien lo abre
+  await Promise.all(ids.filter(Number.isInteger).slice(0, 200).map((p_id) => s.rpc("marcar_correo_leido", { p_id })));
+  revalidatePath("/", "layout");
+}

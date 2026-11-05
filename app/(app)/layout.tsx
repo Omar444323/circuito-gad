@@ -21,15 +21,20 @@ export default async function Layout({ children }: { children: React.ReactNode }
   if (yo.rol === "profesora") {
     const { data } = await s.from("bloqueos").select("etapa, etapa_desde, pedidos(etapa, etapa_desde)").eq("registrado", false);
     const abiertos = ((data ?? []) as unknown as BloqueoAbierto[]).filter((b) => b.pedidos?.etapa === b.etapa && b.pedidos?.etapa_desde === b.etapa_desde).length;
-    nav = [["/", "Panel de control", abiertos], ["/operaciones", "Operaciones"], ["/condiciones", "Condiciones del banco"], ["/equipos", "Equipos y usuarios"], ["/calendario", "Calendario lectivo"]];
+    nav = [["/", "Panel de control", abiertos], ["/operaciones", "Operaciones"], ["/correo", "Todos los correos"], ["/existencias", "Existencias"], ["/condiciones", "Condiciones del banco"], ["/equipos", "Equipos y usuarios"], ["/calendario", "Calendario lectivo"]];
   } else {
-    const { data } = await s.from("pedidos").select("*");
+    const [{ data }, { count: sinLeer }] = await Promise.all([
+      s.from("pedidos").select("*"),
+      s.from("correos").select("id", { count: "exact", head: true }).eq("destinatario_id", yo.empresa_id!).is("leido_en", null),
+    ]);
     const tocan = ((data ?? []) as unknown as Pedido[]).filter((p) => actorDe(p, hoy) === yo.empresa_id).length;
+    const correo: Entrada = ["/correo", "Correo", sinLeer ?? 0];
     if (yo.empresa_id === 5) {
       const { count } = await s.from("ordenes_pago").select("id", { count: "exact", head: true }).eq("estado", "pendiente");
-      nav = [["/", "Inicio"], ["/ordenes", "Órdenes de pago", count ?? 0], ["/condiciones", "Condiciones y cálculo"], ["/operaciones", "Mis operaciones", tocan], ["/operaciones/nuevo", "Nuevo pedido"], ["/mi-cuenta", "Mi cuenta"], ["/mi-empresa", "Mi empresa"]];
+      nav = [["/", "Inicio"], ["/ordenes", "Órdenes de pago", count ?? 0], ["/condiciones", "Condiciones y cálculo"], ["/operaciones", "Mis operaciones", tocan], correo, ["/operaciones/nuevo", "Nuevo pedido"], ["/mi-cuenta", "Mi cuenta"], ["/mi-empresa", "Mi empresa"]];
     } else {
-      nav = [["/", "Inicio"], ["/operaciones", "Operaciones", tocan], ["/operaciones/nuevo", "Nuevo pedido"], ["/mi-cuenta", "Mi cuenta"], ["/condiciones", "Condiciones del banco"], ["/mi-empresa", "Mi empresa"]];
+      const almacen: Entrada[] = yo.empresa_id === 4 ? [] : [["/almacen", yo.empresa_id === 2 ? "Almacén y fabricación" : yo.empresa_id === 6 ? "Almacén y tienda" : "Almacén"]];
+      nav = [["/", "Inicio"], ["/operaciones", "Operaciones", tocan], correo, ["/operaciones/nuevo", "Nuevo pedido"], ...almacen, ["/mi-cuenta", "Mi cuenta"], ["/condiciones", "Condiciones del banco"], ["/mi-empresa", "Mi empresa"]];
     }
   }
   return (

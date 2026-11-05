@@ -208,12 +208,12 @@ describe("servicios y órdenes denegadas", () => {
     expect(nums.map((n) => n.num)).toEqual(["OP1-0001", "OP1-0002"]);
   });
   it("el descubierto está prohibido", async () => {
-    const p = await pedir(U.g6, 2, [["Carro de almacén", 1000]], 1);
-    await acto(U.g2, "select public.aceptar_pedido($1)", [p]);
+    const p = await pedir(U.g6, 3, [["Estantería metálica 5 baldas", 150], ["Carro de almacén", 80]], 1);
+    await acto(U.g3, "select public.aceptar_pedido($1)", [p]);
     await dia("2026-11-12");
-    await acto(U.g2, "select public.emitir_albaran($1)", [p]);
+    await acto(U.g3, "select public.emitir_albaran($1)", [p]);
     await acto(U.g6, "select public.confirmar_recepcion($1)", [p]);
-    await facturar(U.g2, p);
+    await facturar(U.g3, p);
     await acto(U.g6, "select public.aceptar_factura($1, $2)", [p, LISTA]);
     await acto(U.g6, "select public.marcar_registro($1, 'borrador')", [p]);
     await acto(U.g6, "select public.marcar_registro($1, 'diario')", [p]);

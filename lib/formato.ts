@@ -4,4 +4,6 @@ export const fmt = (n: number | string) => {
   return (v < 0 ? "−" : "") + eur.format(Math.abs(v)) + " €";
 };
 export const fecha = (iso: string) => iso.slice(0, 10).split("-").reverse().join("/");
-export const pmp = (n: number) => n.toFixed(4).replace(".", ",");
+const fh = new Intl.DateTimeFormat("es-ES", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Madrid" });
+export const fechaHora = (iso: string) => fh.format(new Date(iso)).replace(",", "");
+export const pmp =(n: number) => n.toFixed(4).replace(".", ",");

@@ -39,3 +39,24 @@ details.ver[open] summary{margin-bottom:12px}
 .log{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px;font-size:13px}
 .log li{display:grid;grid-template-columns:78px minmax(0,1fr);gap:8px}
 .log .d{font-family:var(--f-mono);color:var(--muted)}
+.correo-filtros{display:flex;flex-wrap:wrap;gap:10px 12px;align-items:flex-end}
+.correo-filtros label{display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:600;color:var(--muted);flex:1 1 180px;max-width:320px}
+.correo-lista{list-style:none;margin:-8px 0;padding:0}
+.correo-lista li{border-bottom:1px solid var(--line)}
+.correo-lista li:last-child{border-bottom:0}
+.correo-lista a{display:grid;grid-template-columns:minmax(120px,190px) minmax(0,1fr) auto;gap:4px 14px;align-items:baseline;padding:11px 4px;color:inherit;text-decoration:none}
+.correo-lista a:hover{background:var(--bg)}
+.correo-lista .nuevo .correo-partes,.correo-lista .nuevo .correo-asunto{font-weight:700}
+.correo-asunto{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.correo-asunto .muted{font-weight:400}
+.correo-fecha{font-size:12px;white-space:nowrap}
+@media (max-width:720px){.correo-lista a{grid-template-columns:minmax(0,1fr) auto}.correo-asunto{grid-column:1/-1;grid-row:2}}
+.correo-msg header{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px 16px;border-bottom:1px solid var(--line);padding-bottom:10px;margin-bottom:12px}
+.correo-meta{display:flex;flex-direction:column;align-items:flex-end;font-size:12px}
+.correo-cuerpo{white-space:pre-wrap;overflow-wrap:anywhere}
+textarea.in.correo-texto{font-family:var(--f-body);font-size:15px;min-height:170px;resize:vertical}
+.ficha{font-size:13px}
+.ficha th.grupo{text-align:center}
+.pmp-check{min-width:150px}
+.pmp-check .form{gap:4px}
+.pmp-check .in{padding:3px 6px;font-size:13px}

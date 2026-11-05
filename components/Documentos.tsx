@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { fecha, fmt } from "@/lib/formato";
 import type { Pedido } from "@/lib/circuito";
 
-export type Empresa = { id: number; nombre: string; corto: string; iban: string };
+export type Empresa = { id: number; nombre: string; corto: string; iban: string; con_almacen?: boolean };
 export type Linea = { id: number; descripcion: string; unidades: number; precio: number; pedido_linea_id?: number };
 export type Albaran = { num: string; fecha: string; retrasado: boolean; elaboro_nombre: string; reviso_nombre: string | null };
 export type Factura = {
@@ -83,6 +83,23 @@ export function DocJustificante({ o, ordenante, beneficiario }: { o: Orden; orde
       <div className="parties"><div><span className="lbl">Ordenante</span><strong>{ordenante?.nombre}</strong></div><div><span className="lbl">Beneficiario</span><strong>{beneficiario?.nombre}</strong></div><div><span className="lbl">Fecha de ejecución</span><strong className="mono">{o.fecha_ejecucion ? fecha(o.fecha_ejecucion) : ""}</strong></div></div>
       <div className="tot"><dl className="dl"><dt>Concepto</dt><dd>{o.concepto}</dd><dt className="grand">Importe transferido</dt><dd className="grand">{fmt(o.importe)}</dd>{Number(o.comision) > 0 && <><dt>Comisión cargada al ordenante</dt><dd>{fmt(o.comision)}</dd></>}</dl></div>
       <div className="trace"><span>Ordenó: <b>{o.ordeno_nombre}</b></span><span>Ejecutó (banco): <b>{o.ejecuto_nombre}</b></span></div>
+    </article>
+  );
+}
+
+export type Rectificativa = { id: number; num: string; tipo: string; fecha: string; base: number; iva: number; cuota: number; total: number; estado: string; motivo_rechazo: string | null; elaboro_nombre: string; reviso_nombre: string | null; rectificativa_lineas: { id: number; descripcion: string; unidades: number; precio_neto: number }[] };
+export const TIPOS_RECTIFICATIVA: Record<string, string> = { devolucion: "Devolución de mercancía", rappel: "Rappel fuera de factura", pronto_pago: "Descuento por pronto pago fuera de factura" };
+
+export function DocRectificativa({ r, facturaNum, comprador, vendedor }: { r: Rectificativa; facturaNum: string; comprador?: Empresa; vendedor?: Empresa }) {
+  const sello = r.estado === "aceptada" ? <span className="stamp good">Aceptada</span> : r.estado === "rechazada" ? <span className="stamp bad">Rechazada</span> : <span className="stamp warn">En revisión</span>;
+  const lineas = r.rectificativa_lineas.map((l) => ({ id: l.id, descripcion: l.descripcion, unidades: -Number(l.unidades), precio: Number(l.precio_neto) }));
+  return (
+    <article className="doc"><header className="doc-h"><div><div className="doc-t">Factura rectificativa</div><div className="mono doc-n">{r.num} · rectifica {facturaNum}</div></div>{sello}</header>
+      <Partes a={vendedor} b={comprador} dia={r.fecha} extra={<span className="muted">{TIPOS_RECTIFICATIVA[r.tipo]}</span>} />
+      {lineas.length > 0 && <Lineas ls={lineas} precios />}
+      <div className="tot"><dl className="dl"><dt>Base imponible</dt><dd>{fmt(r.base)}</dd><dt>IVA {pc(r.iva)} %</dt><dd>{fmt(r.cuota)}</dd><dt className="grand">Total</dt><dd className="grand">{fmt(r.total)}</dd></dl></div>
+      {r.motivo_rechazo && <div className="note bad">Motivo del rechazo: {r.motivo_rechazo}</div>}
+      <Traza e={r.elaboro_nombre} r={r.reviso_nombre} />
     </article>
   );
 }

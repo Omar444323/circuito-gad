@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { AccionesPedido, type Bloqueo, type Registro } from "@/components/AccionesPedido";
-import { DocAlbaran, DocFactura, DocJustificante, DocPedido, type Albaran, type Empresa, type Factura, type Linea, type Orden } from "@/components/Documentos";
+import { DocAlbaran, DocFactura, DocJustificante, DocPedido, DocRectificativa, type Albaran, type Empresa, type Factura, type Linea, type Orden, type Rectificativa } from "@/components/Documentos";
 import { miSesion } from "@/lib/sesion";
 import { sb } from "@/lib/supabase";
 import { fecha } from "@/lib/formato";
@@ -19,7 +19,7 @@ export default async function Operacion({ params }: { params: Promise<{ id: stri
   const { data } = await s.from("pedidos").select("*, plazo_limite").eq("id", id).maybeSingle();
   if (!data) return <SinAcceso />;
   const p = data as unknown as Pedido;
-  const [lin, alb, fac, reg, ord, his, blo, emp, con, hoyR] = await Promise.all([
+  const [lin, alb, fac, reg, ord, his, blo, emp, con, hoyR, rec] = await Promise.all([
     s.from("pedido_lineas").select("*").eq("pedido_id", id).order("id"),
     s.from("albaranes").select("*").eq("pedido_id", id).maybeSingle(),
     s.from("facturas").select("*, factura_lineas(*)").eq("pedido_id", id).order("version", { ascending: false }),
@@ -27,11 +27,13 @@ export default async function Operacion({ params }: { params: Promise<{ id: stri
     s.from("ordenes_pago").select("*").eq("pedido_id", id).order("id", { ascending: false }),
     s.from("historial").select("*").eq("pedido_id", id).order("id", { ascending: false }),
     s.from("bloqueos").select("*").eq("pedido_id", id),
-    s.from("empresas").select("id, nombre, corto, iban"),
+    s.from("empresas").select("id, nombre, corto, iban, con_almacen"),
     s.from("condiciones_banco").select("comision_transferencia").order("vigente_desde", { ascending: false }).order("id", { ascending: false }).limit(1).maybeSingle(),
     s.rpc("hoy"),
+    s.from("rectificativas").select("*, rectificativa_lineas(*)").eq("pedido_id", id).order("id", { ascending: false }),
   ]);
   const hoy = hoyR.data as string;
+  const rectificativas = (rec.data ?? []) as unknown as Rectificativa[];
   const lineas = (lin.data ?? []) as unknown as Linea[];
   const albaran = alb.data as unknown as Albaran | null;
   const facturas = (fac.data ?? []) as unknown as Factura[];
@@ -46,6 +48,20 @@ export default async function Operacion({ params }: { params: Promise<{ id: stri
   const orden = ordenes[0];
   const pagada = ordenes.find((o) => o.estado === "ejecutada");
   const disp = yo.empresa_id === p.comprador_id ? await s.rpc("disponible", { p_empresa: p.comprador_id }) : null;
+  let faltan: { descripcion: string; tienes: number; piden: number }[] = [];
+  if (yo.empresa_id === p.vendedor_id && vendedor?.con_almacen && (p.etapa === "pedido_enviado" || p.etapa === "pedido_aceptado")) {
+    const { data: mio } = await s.rpc("almacen", { p_empresa: p.vendedor_id });
+    const articulos = (mio ?? []) as unknown as { catalogo_id: string | null; unidades: number }[];
+    faltan = (lineas as (Linea & { catalogo_id: string })[]).map((l) => ({ descripcion: l.descripcion, tienes: Number(articulos.find((a) => a.catalogo_id === l.catalogo_id)?.unidades ?? 0), piden: Number(l.unidades) })).filter((l) => l.tienes < l.piden);
+  }
+  let porVincular: { linea_id: number; descripcion: string }[] = [];
+  let misArticulos: { id: string; nombre: string }[] = [];
+  if (yo.empresa_id === p.comprador_id && comprador?.con_almacen && p.etapa === "albaran_emitido") {
+    const [vinc, mio] = await Promise.all([s.rpc("lineas_por_vincular", { p_id: Number(id) }), s.rpc("almacen", { p_empresa: p.comprador_id })]);
+    porVincular = (vinc.data ?? []) as unknown as { linea_id: number; descripcion: string }[];
+    misArticulos = (mio.data ?? []) as unknown as { id: string; nombre: string }[];
+  }
+  const otra = yo.empresa_id === p.comprador_id ? p.vendedor_id : p.comprador_id;
   const e = chipEtapa(p, hoy);
   const pl = chipPlazo(p, hoy);
   const i = posicion(p.etapa);
@@ -66,10 +82,11 @@ export default async function Operacion({ params }: { params: Promise<{ id: stri
       <Link className="btn ghost sm" href="/operaciones" style={{ alignSelf: "flex-start", textDecoration: "none" }}>← Operaciones</Link>
       <div className="head"><span className="lbl">Operación</span><h1 className="mono" style={{ fontFamily: "var(--f-mono)" }}>{p.num}</h1>
         <p>{comprador?.corto} compra a {vendedor?.corto}</p>
-        <div className="btns" style={{ marginTop: 8 }}><span className={"chip " + e.color}>{e.texto}</span>{pl && <span className={"chip " + pl.color}>{pl.texto}</span>}</div></div>
+        <div className="btns" style={{ marginTop: 8 }}><span className={"chip " + e.color}>{e.texto}</span>{pl && <span className={"chip " + pl.color}>{pl.texto}</span>}{yo.empresa_id && <Link className="btn ghost sm" href={"/correo/nuevo?para=" + otra + "&pedido=" + p.id} style={{ textDecoration: "none" }}>Escribir sobre esta operación</Link>}</div></div>
       <div className="grid2">
         <div className="stack">
           {pagada && <DocJustificante o={pagada} ordenante={comprador} beneficiario={vendedor} />}
+          {factura && rectificativas.map((r) => <DocRectificativa key={r.id} r={r} facturaNum={factura.num} comprador={comprador} vendedor={vendedor} />)}
           {factura && <DocFactura f={factura} varias={facturas.length > 1} comprador={comprador} vendedor={vendedor} />}
           {facturas.length > 1 && <details className="ver"><summary>Versiones anteriores ({facturas.length - 1})</summary><div className="stack">{facturas.slice(1).map((f) => <DocFactura key={f.id} f={f} varias antigua comprador={comprador} vendedor={vendedor} />)}</div></details>}
           {albaran && <DocAlbaran a={albaran} p={p} lineas={lineas} comprador={comprador} vendedor={vendedor} />}
@@ -77,7 +94,7 @@ export default async function Operacion({ params }: { params: Promise<{ id: stri
         </div>
         <div className="stack">
           <section className="card"><h3>Siguiente paso</h3>
-            <AccionesPedido p={p} miEmpresa={yo.empresa_id} hoy={hoy} factura={factura} orden={orden} registros={registros} empresas={empresas} comision={Number(con.data?.comision_transferencia ?? 0)} disponible={disp ? Number(disp.data) : null} bloqueos={(blo.data ?? []) as unknown as Bloqueo[]} lineas={lineas} />
+            <AccionesPedido p={p} miEmpresa={yo.empresa_id} hoy={hoy} factura={factura} orden={orden} registros={registros} empresas={empresas} comision={Number(con.data?.comision_transferencia ?? 0)} disponible={disp ? Number(disp.data) : null} bloqueos={(blo.data ?? []) as unknown as Bloqueo[]} lineas={lineas} rectificativas={rectificativas} faltan={faltan} hayAlmacen={!!vendedor?.con_almacen} porVincular={porVincular} misArticulos={misArticulos} />
           </section>
           <section className="card"><h3>Circuito</h3>
             <ol className="steps">{pasos.map(([t, c]) => <li className={c} key={t}>{t}</li>)}</ol>

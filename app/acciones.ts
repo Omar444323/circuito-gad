@@ -134,3 +134,24 @@ export async function restablecerClave(_: Res, f: FormData): Promise<Res> {
   const { error } = await admin().auth.admin.updateUserById(t(f, "perfil"), { password: clave });
   return error ? { error: "No se ha podido restablecer la contraseña." } : { temporal: clave };
 }
+
+// Arranque: solo funciona mientras no exista ningún perfil y se cierra sola al crear las cuentas
+export async function crearCuentasIniciales(_: Res, f: FormData): Promise<Res> {
+  void f;
+  const a = admin();
+  const hay = await a.from("perfiles").select("id", { count: "exact", head: true });
+  if (hay.error) return { error: "No se ha podido comprobar el estado: " + hay.error.message };
+  if (hay.count) return { error: "Las cuentas ya están creadas." };
+  const cuentas: { usuario: string; nombre: string; rol: string; empresa_id: number | null }[] = [{ usuario: "profesora", nombre: "Profesora", rol: "profesora", empresa_id: null }];
+  for (let g = 1; g <= 6; g++) cuentas.push({ usuario: "grupo" + g, nombre: "Cuenta inicial grupo " + g, rol: "alumno", empresa_id: g });
+  const salida: string[] = [];
+  for (const c of cuentas) {
+    const clave = claveTemporal();
+    const { data, error } = await a.auth.admin.createUser({ email: c.usuario + "@gad.local", password: clave, email_confirm: true });
+    if (error || !data.user) return { error: "Fallo al crear " + c.usuario + ": " + (error?.message ?? "sin datos"), temporal: salida.join("\n") || undefined };
+    const r = await a.from("perfiles").insert({ id: data.user.id, ...c });
+    if (r.error) return { error: "Fallo al registrar " + c.usuario + ": " + r.error.message, temporal: salida.join("\n") || undefined };
+    salida.push(c.usuario + " · " + clave);
+  }
+  return { ok: "Cuentas creadas. Apúntalas antes de salir de esta página.", temporal: salida.join("\n") };
+}

@@ -9,6 +9,7 @@ for (let g = 1; g <= 6; g++) cuentas.push({ usuario: "grupo" + g, nombre: "Cuent
 
 for (const c of cuentas) {
   const ya = await a.from("perfiles").select("id").eq("usuario", c.usuario).maybeSingle();
+  if (ya.error) throw ya.error;
   if (ya.data) {
     console.log(c.usuario, "ya existe; no se toca");
     continue;

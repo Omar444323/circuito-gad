@@ -9,3 +9,4 @@ Decisiones tomadas donde el documento y el prototipo no coincidían o el documen
 5. **Plazos de vencimiento (fase 2).** El prototipo ofrece valores fijos y el documento de 5 a 30 días. Se admitirá cualquier valor del rango.
 6. **Perfiles de otros equipos.** Las normas no los incluyen entre los datos visibles, así que solo los ve el propio equipo y la profesora. Los documentos copiarán el nombre de quien firma.
 7. **Permisos.** Ningún rol de cliente escribe en las tablas: solo funciones `security definer` con `search_path` vacío.
+8. **Cuentas iniciales.** Las claves secretas de Vercel no se pueden descargar, así que `/arranque` crea las cuentas desde el servidor. Solo funciona con la tabla `perfiles` vacía y se cierra sola. `scripts/crear-cuentas.mjs` queda como alternativa con la clave pegada a mano.

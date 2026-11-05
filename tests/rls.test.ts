@@ -160,3 +160,16 @@ describe("datos iniciales y calendario", () => {
     expect(await dia("insert into public.calendario values ('2026-11-09', 'Festivo')")).toBe("2026-11-11");
   });
 });
+
+describe("clave de servidor", () => {
+  it("puede leer e insertar perfiles, pero no tocar nada más", async () => {
+    await db.exec("begin");
+    try {
+      await db.exec("set local role service_role");
+      expect((await db.query("select * from public.perfiles")).rows).toHaveLength(6);
+      await expect(db.query("update public.empresas set nombre = 'X'")).rejects.toThrow(/permission denied/);
+    } finally {
+      await db.exec("rollback");
+    }
+  });
+});

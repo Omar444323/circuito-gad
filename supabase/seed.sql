@@ -6,3 +6,5 @@ insert into public.articulos (empresa_id, nombre, cuenta, unidades, valor, catal
 with r as (insert into public.recetas (producto_id) select id from public.articulos where empresa_id = 2 and cuenta = 350 returning id, producto_id)insert into public.recetas_lineas (receta_id, materia_id, cantidad) select r.id, m.id, x.q from r join public.articulos p on p.id = r.producto_id join (values ('Estantería metálica 5 baldas','Planchas de acero 1 mm',4),('Estantería metálica 5 baldas','Tornillería M6 (caja 100 uds)',1),('Carro de almacén','Planchas de acero 1 mm',3),('Carro de almacén','Tornillería M6 (caja 100 uds)',1),('Carro de almacén','Pintura epoxi (bote 5 L)',1)) as x(prod,mat,q) on x.prod = p.nombre join public.articulos m on m.empresa_id = 2 and m.cuenta = 310 and m.nombre = x.mat;
 insert into public.modulos (clave, nombre) values ('iva','Liquidación de IVA'),('nominas','Nóminas'),('financiacion','Financiación'),('cierre','Fin de ejercicio');
 insert into public.condiciones_banco (comision_transferencia) values (1.50);
+-- Vincula artículos entre proveedor y comprador, y abre las fichas con las existencias iniciales
+select public._iniciar_almacen();

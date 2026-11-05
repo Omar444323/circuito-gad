@@ -36,7 +36,8 @@ export async function emitirAlbaran(_: Res, f: FormData) {
   return rpc("emitir_albaran", { p_id: id(f) }, "Albarán emitido.");
 }
 export async function confirmarRecepcion(_: Res, f: FormData) {
-  return rpc("confirmar_recepcion", { p_id: id(f) }, "Recepción confirmada.");
+  const vinculos = Object.fromEntries([...f.entries()].filter(([k, x]) => k.startsWith("vinculo_") && String(x)).map(([k, x]) => [k.slice(8), String(x)]));
+  return rpc("confirmar_recepcion", { p_id: id(f), p_vinculos: vinculos }, "Recepción confirmada.");
 }
 export async function emitirFactura(_: Res, f: FormData) {
   const lineas = [...f.entries()].filter(([k]) => k.startsWith("u_")).map(([k, v]) => ({ linea_id: Number(k.slice(2)), unidades: num(String(v)), precio: num(t(f, "p_" + k.slice(2))) }));
@@ -88,4 +89,38 @@ export async function puntear(_: Res, f: FormData) {
 }
 export async function simularFecha(_: Res, f: FormData) {
   return rpc("simular_fecha", { p_fecha: t(f, "fecha") || null }, "Fecha actualizada.");
+}
+export async function emitirRectificativa(_: Res, f: FormData) {
+  const lineas = [...f.entries()].filter(([k, x]) => k.startsWith("ru_") && num(String(x)) > 0).map(([k, x]) => ({ linea_id: Number(k.slice(3)), unidades: num(String(x)) }));
+  const base = t(f, "base");
+  return rpc("emitir_rectificativa", { p_id: id(f), p_tipo: t(f, "tipo"), p_lineas: lineas, p_base: base ? num(base) : null }, "Rectificativa emitida.");
+}
+export async function aceptarRectificativa(_: Res, f: FormData) {
+  return rpc("aceptar_rectificativa", { p_id: id(f) }, "Rectificativa aceptada.");
+}
+export async function rechazarRectificativa(_: Res, f: FormData) {
+  return rpc("rechazar_rectificativa", { p_id: id(f), p_motivo: t(f, "motivo") }, "Rectificativa rechazada.");
+}
+export async function fabricar(_: Res, f: FormData) {
+  return rpc("fabricar", { p_producto: t(f, "producto"), p_unidades: num(t(f, "unidades")) }, "Fabricación registrada.");
+}
+export async function venderTienda(_: Res, f: FormData) {
+  return rpc("vender_tienda", { p_articulo: t(f, "articulo"), p_unidades: num(t(f, "unidades")) }, "Venta y cobro registrados.");
+}
+export async function comprobarPmp(_: Res, f: FormData): Promise<Res> {
+  const s = await sb();
+  const { data, error } = await s.rpc("comprobar_pmp", { p_mov: id(f, "mov"), p_pmp: num(t(f, "pmp")) });
+  if (error) return { error: error.message };
+  revalidatePath("/", "layout");
+  return data ? { ok: "Correcto." } : { error: "Revisa el cálculo." };
+}
+export async function enviarCorreo(_: Res, f: FormData): Promise<Res> {
+  const responde = t(f, "responde_a");
+  const pedido = t(f, "pedido");
+  const destino = t(f, "destinatario");
+  const s = await sb();
+  const { data, error } = await s.rpc("enviar_correo", { p_destinatario: destino ? Number(destino) : null, p_asunto: t(f, "asunto"), p_cuerpo: t(f, "cuerpo"), p_responde_a: responde ? Number(responde) : null, p_pedido: pedido ? Number(pedido) : null });
+  if (error) return { error: error.message };
+  revalidatePath("/", "layout");
+  redirect("/correo/" + data);
 }

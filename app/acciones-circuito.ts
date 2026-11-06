@@ -62,6 +62,45 @@ export async function quitarTramoRappel(_: Res, f: FormData) {
 export async function emitirRappelVolumen(_: Res, f: FormData) {
   return rpc("emitir_rappel_volumen", { p_pedido: id(f), p_mes: t(f, "mes") }, "Rappel emitido. El cliente tiene que aceptar la rectificativa.");
 }
+export async function rechazarAlbaran(_: Res, f: FormData) {
+  return rpc("rechazar_albaran", { p_id: id(f), p_motivo: t(f, "motivo") }, "Albarán rechazado. El proveedor tiene un día lectivo para reemitirlo.");
+}
+export async function intervenirPedido(_: Res, f: FormData) {
+  return rpc("intervenir_pedido", { p_id: id(f), p_motivo: t(f, "motivo"), p_iva: num(t(f, "iva") || "21"), p_vencimiento: Number(t(f, "vencimiento") || 15) }, "Documento sustitutorio emitido e incumplimiento registrado.");
+}
+export async function fijarIvaCatalogo(_: Res, f: FormData) {
+  return rpc("fijar_iva_catalogo", { p_id: t(f, "id"), p_iva: num(t(f, "iva")) }, "Tipo de IVA guardado.");
+}
+export async function pagarCuota(_: Res, f: FormData) {
+  return rpc("pagar_cuota", { p_id: id(f, "cuota") }, "Cuota pagada.");
+}
+export async function solicitarPrestamoPersonal(_: Res, f: FormData) {
+  return rpc("solicitar_prestamo_personal", { p_importe: num(t(f, "importe")), p_plazo: Number(t(f, "plazo")), p_motivo: t(f, "motivo") }, "Solicitud enviada al banco.");
+}
+export async function comprarEnTienda(_: Res, f: FormData) {
+  return rpc("comprar_en_tienda", { p_catalogo: t(f, "catalogo"), p_unidades: num(t(f, "unidades")) }, "Compra hecha. Tienes el justificante abajo.");
+}
+export async function contratarServicioPersonal(_: Res, f: FormData) {
+  return rpc("contratar_servicio_personal", { p_catalogo: t(f, "catalogo"), p_unidades: num(t(f, "unidades")) }, "Servicio contratado. Tienes el justificante abajo.");
+}
+export async function pagarGastoPersonal(_: Res, f: FormData) {
+  return rpc("pagar_gasto_personal", { p_tipo: t(f, "tipo"), p_total: num(t(f, "total")), p_concepto: t(f, "concepto") }, "Recibo pagado.");
+}
+export async function fijarReglasNomina(_: Res, f: FormData) {
+  return rpc("fijar_reglas_nomina", { p_ss_trabajador: pct(f, "ss_trabajador"), p_ss_empresa: pct(f, "ss_empresa"), p_irpf: pct(f, "irpf") }, "Reglas guardadas.");
+}
+export async function emitirNomina(_: Res, f: FormData) {
+  return rpc("emitir_nomina", { p_trabajador: t(f, "trabajador"), p_mes: t(f, "mes") + "-01", p_bruto: num(t(f, "bruto")) }, "Nómina emitida y pagada.");
+}
+export async function constituirFianza(_: Res, f: FormData) {
+  return rpc("constituir_fianza", { p_suministro: t(f, "suministro"), p_importe: num(t(f, "importe")) }, "Fianza depositada.");
+}
+export async function devolverFianza(_: Res, f: FormData) {
+  return rpc("devolver_fianza", { p_id: id(f, "fianza") }, "Fianza devuelta.");
+}
+export async function presentarIva(_: Res, f: FormData) {
+  return rpc("presentar_iva", { p_periodo: t(f, "periodo"), p_repercutido: num(t(f, "repercutido")), p_soportado: num(t(f, "soportado")) }, "Modelo presentado.");
+}
 export async function contratarEnvio(_: Res, f: FormData) {
   return rpc("contratar_envio", { p_pedido: id(f), p_catalogo: t(f, "envio_catalogo"), p_unidades: num(t(f, "envio_unidades") || "1") }, "Envío contratado con el G4.");
 }

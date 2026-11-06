@@ -1,13 +1,13 @@
 import { redirect } from "next/navigation";
 import { Form } from "@/components/Form";
 import { guardarArticulo, quitarArticulo } from "@/app/acciones";
-import { autorizarDescubierto, autorizarFinanciacion, resolverPlan, resolverPrecio } from "@/app/acciones-circuito";
+import { autorizarDescubierto, autorizarFinanciacion, fijarIvaCatalogo, resolverPlan, resolverPrecio } from "@/app/acciones-circuito";
 import { miSesion } from "@/lib/sesion";
 import { sb } from "@/lib/supabase";
 import { fecha, fmt } from "@/lib/formato";
 
 type Solicitud = { id: number; empresa_id: number; catalogo_id: string | null; nombre: string; coste: number; margen: number; precio: number; precio_anterior: number | null; fecha: string; solicito_nombre: string };
-type Prestamo = { id: number; empresa_id: number; importe: number; plazo_meses: number; motivo: string; tipo_interes: number | null; causa_distinta: string | null; banco_nombre: string | null; solicito_nombre: string };
+type Prestamo = { perfil_id: string | null; id: number; empresa_id: number; importe: number; plazo_meses: number; motivo: string; tipo_interes: number | null; causa_distinta: string | null; banco_nombre: string | null; solicito_nombre: string };
 type Plan = { id: number; empresa_id: number; reduccion_gastos: string; revision_precios: string; financiacion: string; importe_solicitado: number; fecha: string; presento_nombre: string };
 type Descubierto = { id: number; empresa_id: number; limite: number; motivo: string; fecha: string };
 const pc = (v: number | null) => String(Number(v ?? 0)).replace(".", ",") + " %";
@@ -31,6 +31,10 @@ export default async function Autorizaciones() {
   const descubiertos = (des ?? []) as unknown as Descubierto[];
   const corto = (g: number) => emp?.find((e) => e.id === g)?.corto ?? "";
   // Vigente: la última autorización de cada empresa
+  const [{ data: catalogo }, { data: empresasCat }] = await Promise.all([
+    s.from("catalogo").select("id, empresa_id, nombre, iva").eq("activo", true).order("nombre"),
+    s.from("empresas").select("id, corto").order("id"),
+  ]);
   const vigentes = descubiertos.filter((d, i) => descubiertos.findIndex((x) => x.empresa_id === d.empresa_id) === i && Number(d.limite) > 0);
   return (
     <>
@@ -49,7 +53,7 @@ export default async function Autorizaciones() {
       <section className="card"><h2>Préstamos estudiados por el banco</h2>
         {prestamos.length ? <div className="stack">{prestamos.map((p) => (
           <div className="doc" key={p.id}>
-            <div className="btns" style={{ justifyContent: "space-between" }}><strong>{corto(p.empresa_id)} · {fmt(p.importe)} a {p.plazo_meses} meses</strong><span className="chip info">Tipo {pc(p.tipo_interes)}</span></div>
+            <div className="btns" style={{ justifyContent: "space-between" }}><strong>{corto(p.empresa_id)}{p.perfil_id ? " · préstamo personal de " + p.solicito_nombre : ""} · {fmt(p.importe)} a {p.plazo_meses} meses</strong><span className="chip info">Tipo {pc(p.tipo_interes)}</span></div>
             <p>{p.motivo}</p>
             {p.causa_distinta && <div className="note warn">Tipo distinto del publicado. Causa: {p.causa_distinta}</div>}
             <p className="hint">Lo pide {p.solicito_nombre}. Lo estudia {p.banco_nombre}.</p>
@@ -93,6 +97,14 @@ export default async function Autorizaciones() {
             <Form action={quitarArticulo} boton="Quitar" clase="btn danger sm"><input type="hidden" name="id" value={c.id} /></Form>
           </div>))}</div>
         <Form action={guardarArticulo} boton="Añadir materia prima" clase="btn ghost"><input type="hidden" name="empresa" value="7" /><input type="hidden" name="margen" value="0" /><div className="row3"><label>Nombre<input className="in" name="nombre" required /></label><label>Precio sin IVA €<input className="in" name="coste" inputMode="decimal" required /></label></div></Form>
+      </section>
+      <section className="card"><h2>IVA del catálogo</h2>
+        <p className="hint">Punto 3.6: el tipo que indiques aquí rellena la factura y se aplica en la tienda. Todos empiezan en el 21 %.</p>
+        <div className="stack">{(empresasCat ?? []).map((e) => { const items = (catalogo ?? []).filter((c) => c.empresa_id === e.id); return items.length ? (
+          <details className="ver" key={e.id}><summary>{e.corto} ({items.length})</summary><div>{items.map((c) => (
+            <div className="fila" key={c.id}><span>{c.nombre}</span><Form action={fijarIvaCatalogo} boton="Guardar" clase="btn ghost sm"><input type="hidden" name="id" value={c.id} /><select className="in" name="iva" defaultValue={Number(c.iva)} aria-label={"IVA de " + c.nombre}>{[21, 10, 4, 0].map((v) => <option key={v} value={v}>{v} %</option>)}</select></Form></div>
+          ))}</div></details>
+        ) : null; })}</div>
       </section>
     </>
   );

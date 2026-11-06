@@ -1,6 +1,7 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { leerCsv } from "@/lib/exportar";
 import { sb } from "@/lib/supabase";
 import type { Res } from "@/components/Form";
 
@@ -100,6 +101,17 @@ export async function devolverFianza(_: Res, f: FormData) {
 }
 export async function presentarIva(_: Res, f: FormData) {
   return rpc("presentar_iva", { p_periodo: t(f, "periodo"), p_repercutido: num(t(f, "repercutido")), p_soportado: num(t(f, "soportado")) }, "Modelo presentado.");
+}
+export async function importarDocumentos(_: Res, f: FormData): Promise<Res> {
+  const fichero = f.get("fichero");
+  const texto = fichero instanceof File && fichero.size > 0 ? await fichero.text() : t(f, "texto");
+  if (!texto) return { error: "Elige un fichero o pega las filas." };
+  const { filas, error } = leerCsv(texto);
+  if (error) return { error };
+  return rpc("importar_documentos", { p_nombre: t(f, "nombre"), p_filas: filas }, filas.length === 1 ? "Importada 1 fila." : `Importadas ${filas.length} filas.`);
+}
+export async function anularImportacion(_: Res, f: FormData) {
+  return rpc("anular_importacion", { p_lote: id(f, "lote") }, "Importación anulada.");
 }
 export async function contratarEnvio(_: Res, f: FormData) {
   return rpc("contratar_envio", { p_pedido: id(f), p_catalogo: t(f, "envio_catalogo"), p_unidades: num(t(f, "envio_unidades") || "1") }, "Envío contratado con el G4.");

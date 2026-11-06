@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- filas sin tipar de la base de datos */
 import { PGlite } from "@electric-sql/pglite";
 import { readFileSync, readdirSync } from "node:fs";
 import { beforeAll, describe, expect, it } from "vitest";

@@ -12,7 +12,7 @@ export async function cuentaActual(): Promise<Perfil> {
   if (!data.user) redirect("/login");
   const { data: p } = await s.from("perfiles").select("*").eq("id", data.user.id).maybeSingle();
   if (!p || !p.activo) {
-    (await cookies()).delete("firmante");
+    // Esto corre al dibujar la página, donde Next no deja borrar cookies: `entrar` ya borra la de firmante
     await s.auth.signOut();
     redirect("/login");
   }

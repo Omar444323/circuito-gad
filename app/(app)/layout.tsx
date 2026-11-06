@@ -31,7 +31,7 @@ export default async function Layout({ children }: { children: React.ReactNode }
       s.from("deudas").select("id", contar).not("impago_comunicado", "is", null).eq("impago_registrado", false).eq("estado", "vigente"),
     ]);
     const abiertos = ((data ?? []) as unknown as BloqueoAbierto[]).filter((b) => b.pedidos?.etapa === b.etapa && b.pedidos?.etapa_desde === b.etapa_desde).length;
-    nav = [["/", "Panel de control", abiertos], ["/operaciones", "Operaciones"], ["/presupuestos", "Presupuestos"], ["/deudas", "Deudas", impagos ?? 0], ["/seguimiento", "Seguimiento"], ["/archivo", "Archivo"], ["/importar", "Importar lo ya hecho"], ["/rotacion", "Rotación de roles"], ["/nominas", "Nóminas"], ["/iva", "Liquidación de IVA"], ["/fianzas", "Electricidad y agua"], ["/correo", "Todos los correos"], ["/circulares", "Circulares y entregas", entregas ?? 0], ["/autorizaciones", "Autorizaciones", (precios ?? 0) + (prestamos ?? 0) + (planes ?? 0)], ["/existencias", "Existencias"], ["/condiciones", "Condiciones del banco"], ["/equipos", "Equipos y usuarios"], ["/calendario", "Calendario lectivo"]];
+    nav = [["/", "Panel de control", abiertos], ["/operaciones", "Operaciones"], ["/presupuestos", "Presupuestos"], ["/deudas", "Deudas", impagos ?? 0], ["/seguimiento", "Seguimiento"], ["/archivo", "Archivo"], ["/importar", "Importar lo ya hecho"], ["/rotacion", "Rotación de roles"], ["/nominas", "Nóminas"], ["/iva", "Liquidación de IVA"], ["/fianzas", "Electricidad y agua"], ["/correo", "Todos los correos"], ["/circulares", "Circulares y entregas", entregas ?? 0], ["/autorizaciones", "Autorizaciones", (precios ?? 0) + (prestamos ?? 0) + (planes ?? 0)], ["/existencias", "Existencias"], ["/condiciones", "Condiciones del banco"], ["/equipos", "Equipos y usuarios"], ["/calendario", "Calendario lectivo"], ["/ayuda", "Ayuda"]];
   } else {
     const [{ data }, { data: pres }, { count: sinLeer }, { count: circulares }, { count: leidas }, { data: deu }] = await Promise.all([
       s.from("pedidos").select("*, plazo_limite"),
@@ -55,10 +55,10 @@ export default async function Layout({ children }: { children: React.ReactNode }
         s.from("ordenes_pago").select("id", contar).eq("estado", "ejecutada").is("revisado_en", null),
         s.from("solicitudes_financiacion").select("id", contar).eq("estado", "solicitada"),
       ]);
-      nav = [["/", "Inicio"], ["/ordenes", "Pagos por revisar", sinRevisar ?? 0], ["/financiacion", "Financiación", solicitudes ?? 0], ["/condiciones", "Condiciones y cálculo"], ["/operaciones", "Mis operaciones", tocan], presupuestos, deudasNav, correo, avisos, ["/operaciones/nuevo", "Nuevo pedido"], ["/mi-cuenta", "Mi cuenta"], ...obligaciones, ["/mi-empresa", "Mi empresa"]];
+      nav = [["/", "Inicio"], ["/ordenes", "Pagos por revisar", sinRevisar ?? 0], ["/financiacion", "Financiación", solicitudes ?? 0], ["/condiciones", "Condiciones y cálculo"], ["/operaciones", "Mis operaciones", tocan], presupuestos, deudasNav, correo, avisos, ["/operaciones/nuevo", "Nuevo pedido"], ["/mi-cuenta", "Mi cuenta"], ...obligaciones, ["/mi-empresa", "Mi empresa"], ["/ayuda", "Ayuda"]];
     } else {
       const almacen: Entrada[] = yo.empresa_id === 4 ? [] : [["/almacen", yo.empresa_id === 2 ? "Almacén y fabricación" : yo.empresa_id === 6 ? "Almacén y tienda" : "Almacén"]];
-      nav = [["/", "Inicio"], ["/operaciones", "Operaciones", tocan], presupuestos, deudasNav, correo, avisos, ["/operaciones/nuevo", "Nuevo pedido"], ...almacen, ["/mi-cuenta", "Mi cuenta"], ...obligaciones, ["/financiacion", "Financiación"], ["/condiciones", "Condiciones del banco"], ["/mi-empresa", "Mi empresa"]];
+      nav = [["/", "Inicio"], ["/operaciones", "Operaciones", tocan], presupuestos, deudasNav, correo, avisos, ["/operaciones/nuevo", "Nuevo pedido"], ...almacen, ["/mi-cuenta", "Mi cuenta"], ...obligaciones, ["/financiacion", "Financiación"], ["/condiciones", "Condiciones del banco"], ["/mi-empresa", "Mi empresa"], ["/ayuda", "Ayuda"]];
     }
   }
   return (

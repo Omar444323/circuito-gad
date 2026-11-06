@@ -27,7 +27,7 @@ export default async function Seguimiento() {
         <div className="tw"><table className="t"><thead><tr><th>Empresa</th><th>Catálogo</th><th>Electricidad</th><th>Agua</th>{SERVICIOS.map(([n]) => <th key={n}>{n}</th>)}</tr></thead><tbody>
           {(emp ?? []).map((e) => <tr key={e.id}><td><strong>{e.corto}</strong></td><td>{si((cat ?? []).some((c) => c.empresa_id === e.id))}</td>
             {["electricidad", "agua"].map((k) => <td key={k}>{si((fia ?? []).some((z) => z.empresa_id === e.id && z.suministro === k && z.estado === "constituida"))}</td>)}
-            {SERVICIOS.map(([n, r]) => <td key={n}>{si(lineas.some((l) => l.pedidos?.comprador_id === e.id && l.pedidos.servicio && l.pedidos.etapa !== "pedido_rechazado" && r.test(l.descripcion)))}</td>)}
+            {SERVICIOS.map(([n, r]) => <td key={n}>{si(lineas.some((l) => l.pedidos?.comprador_id === e.id && l.pedidos?.servicio && l.pedidos?.etapa !== "pedido_rechazado" && r.test(l.descripcion)))}</td>)}
           </tr>)}
         </tbody></table></div>
       </section>

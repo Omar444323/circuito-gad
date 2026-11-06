@@ -7,7 +7,7 @@ import { miSesion } from "@/lib/sesion";
 import { sb } from "@/lib/supabase";
 import { fecha, fmt } from "@/lib/formato";
 
-type Solicitud = { perfil_id: string | null; solicito_nombre: string; cuotas_prestamo: Cuota[]; id: number; empresa_id: number; importe: number; plazo_meses: number; motivo: string; fecha: string; estado: string; tipo_interes: number | null; motivo_rechazo: string | null; rechazada_por: string | null; justificante: string | null; solicito_nombre: string; plazo_financiacion: string | null };
+type Solicitud = { perfil_id: string | null; cuotas_prestamo: Cuota[]; id: number; empresa_id: number; importe: number; plazo_meses: number; motivo: string; fecha: string; estado: string; tipo_interes: number | null; motivo_rechazo: string | null; rechazada_por: string | null; justificante: string | null; solicito_nombre: string; plazo_financiacion: string | null };
 type Plan = { id: number; importe_solicitado: number; fecha: string; estado: string; importe_aprobado: number | null; condiciones: string | null; justificante: string | null };
 const ESTADOS: Record<string, [string, string]> = { solicitada: ["En el banco", "info"], estudiada: ["Con la profesora", "warn"], autorizada: ["Autorizada y abonada", "good"], rechazada: ["Rechazada", "bad"] };
 const PLANES: Record<string, [string, string]> = { presentado: ["Con la profesora", "warn"], aprobado: ["Aprobado", "good"], rechazado: ["Rechazado", "bad"] };

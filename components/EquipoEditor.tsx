@@ -1,14 +1,22 @@
 import { Form } from "@/components/Form";
 import { altaIntegrante, darBaja, guardarArticulo, guardarEmpresa, guardarNombre, guardarReceta, quitarArticulo } from "@/app/acciones";
 import { sb } from "@/lib/supabase";
+import { fecha, fmt } from "@/lib/formato";
+
+type Solicitud = { id: number; catalogo_id: string | null; nombre: string; precio: number; estado: string; motivo_rechazo: string | null; fecha: string };
 
 export async function EquipoEditor({ empresa }: { empresa: number }) {
   const s = await sb();
-  const [{ data: e }, { data: gente }, { data: cat }] = await Promise.all([
+  const [{ data: e }, { data: gente }, { data: cat }, { data: sol }] = await Promise.all([
     s.from("empresas").select("*").eq("id", empresa).single(),
-    s.from("perfiles").select("*").eq("empresa_id", empresa).eq("activo", true).order("nombre"),
+    s.from("perfiles").select("*").eq("empresa_id", empresa).eq("activo", true).eq("cuenta_grupo", false).order("nombre"),
     s.from("catalogo").select("*").eq("empresa_id", empresa).eq("activo", true).order("nombre"),
+    s.from("solicitudes_precio").select("id, catalogo_id, nombre, precio, estado, motivo_rechazo, fecha").eq("empresa_id", empresa).neq("estado", "aceptada").order("id", { ascending: false }).limit(20),
   ]);
+  const solicitudes = (sol ?? []) as unknown as Solicitud[];
+  const pendiente = (c: string) => solicitudes.find((x) => x.catalogo_id === c && x.estado === "pendiente");
+  const altas = solicitudes.filter((x) => !x.catalogo_id && x.estado === "pendiente");
+  const rechazadas = solicitudes.filter((x) => x.estado === "rechazada").slice(0, 5);
   const id = <input type="hidden" name="empresa" value={empresa} />;
   return (
     <>
@@ -29,13 +37,22 @@ export async function EquipoEditor({ empresa }: { empresa: number }) {
       </section>
       {empresa === 5 ? <section className="card"><h2>Catálogo</h2><p className="hint">El banco publica sus comisiones en sus condiciones.</p></section> : (
         <section className="card"><h2>Catálogo de precios</h2>
-          <div>{cat?.map((c) => (
-            <div className="fila" key={c.id}>
-              <Form action={guardarArticulo} boton="Guardar" clase="btn ghost sm">{id}<input type="hidden" name="id" value={c.id} /><div className="row3"><label>{empresa === 4 ? "Servicio" : "Artículo"}<input className="in" name="nombre" defaultValue={c.nombre} required /></label><label>Precio sin IVA €<input className="in" name="precio" inputMode="decimal" defaultValue={c.precio} required /></label></div></Form>
-              <Form action={quitarArticulo} boton="Quitar" clase="btn danger sm"><input type="hidden" name="id" value={c.id} /></Form>
-            </div>))}</div>
-          <p className="hint" style={{ marginBlock: 12 }}>Los cambios de precio solo afectan a los pedidos nuevos: los ya enviados conservan su precio.</p>
-          <Form action={guardarArticulo} boton={empresa === 4 ? "Añadir servicio" : "Añadir artículo"} clase="btn ghost">{id}<div className="row3"><label>Nombre<input className="in" name="nombre" required /></label><label>Precio sin IVA €<input className="in" name="precio" inputMode="decimal" required /></label></div></Form>
+          <div>{cat?.map((c) => {
+            const p = pendiente(c.id);
+            return (
+              <div className="fila" key={c.id}>
+                <Form action={guardarArticulo} boton="Guardar" clase="btn ghost sm">{id}<input type="hidden" name="id" value={c.id} />
+                  <div className="row3"><label>{empresa === 4 ? "Servicio" : "Artículo"}<input className="in" name="nombre" defaultValue={c.nombre} required /></label><label>Coste €<input className="in" name="coste" inputMode="decimal" defaultValue={c.coste ?? c.precio} required /></label><label>Margen %<input className="in" name="margen" inputMode="decimal" defaultValue={c.margen ?? 0} required /></label></div>
+                  <p className="hint">Precio de venta sin IVA: <strong>{fmt(c.precio)}</strong>{p && <> · <span className="chip warn">Pendiente de aceptar: {fmt(p.precio)}</span></>}</p>
+                </Form>
+                <Form action={quitarArticulo} boton="Quitar" clase="btn danger sm"><input type="hidden" name="id" value={c.id} /></Form>
+              </div>
+            );
+          })}</div>
+          {altas.map((a) => <div className="fila" key={a.id}><span>{a.nombre} · {fmt(a.precio)}</span><span className="chip warn">Artículo nuevo pendiente de aceptar</span></div>)}
+          <p className="hint" style={{ marginBlock: 12 }}>El precio de venta es el coste más el margen. Según las normas, cada cambio de precio y cada artículo nuevo necesitan que la profesora los acepte. Mientras tanto se sigue vendiendo al precio actual, y los pedidos ya enviados conservan el suyo.</p>
+          {rechazadas.length > 0 && <div className="stack" style={{ marginBottom: 12 }}>{rechazadas.map((r) => <div className="note bad" key={r.id}>{fecha(r.fecha)}: rechazado {r.nombre} a {fmt(r.precio)}. {r.motivo_rechazo}</div>)}</div>}
+          <Form action={guardarArticulo} boton={empresa === 4 ? "Proponer servicio" : "Proponer artículo"} clase="btn ghost">{id}<div className="row3"><label>Nombre<input className="in" name="nombre" required /></label><label>Coste €<input className="in" name="coste" inputMode="decimal" required /></label><label>Margen %<input className="in" name="margen" inputMode="decimal" defaultValue="0" required /></label></div></Form>
         </section>
       )}
       {empresa === 2 && <Recetas />}

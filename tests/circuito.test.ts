@@ -36,9 +36,9 @@ const etapa = async (p: number) => (await db.query<{ e: string }>("select etapa 
 async function catalogo(g: number, nombre: string) {
   return (await db.query<{ id: string }>("select id from public.catalogo where empresa_id = $1 and nombre = $2", [g, nombre])).rows[0].id;
 }
-async function pedir(u: string, vendedor: number, lineas: [string, number][], dias: number | null) {
+async function pedir(u: string, vendedor: number, lineas: [string, number][], dias: number | null, confirmado = false) {
   const ls = await Promise.all(lineas.map(async ([n, unidades]) => ({ catalogo_id: await catalogo(vendedor, n), unidades })));
-  const [r] = await acto(u, "select public.crear_pedido($1::smallint, $2::jsonb, $3) id", [vendedor, JSON.stringify(ls), dias]);
+  const [r] = await acto(u, "select public.crear_pedido($1::smallint, $2::jsonb, $3, $4) id", [vendedor, JSON.stringify(ls), dias, confirmado]);
   return Number(r.id);
 }
 async function facturar(u: string, p: number, o: { dto?: number; portes?: number; iva?: number; ret?: number; venc?: number } = {}) {
@@ -143,49 +143,49 @@ describe("recorrido completo: G2 compra al G1 y paga por el banco", () => {
     expect(await etapa(p)).toBe("factura_aceptada");
   });
   it("sin borrador y diario del comprador no se ordena el pago", async () => {
-    await expect(acto(U.g2, "select public.ordenar_pago($1, true)", [p])).rejects.toThrow(/borrador manual/);
+    await expect(acto(U.g2, "select public.ordenar_pago($1)", [p])).rejects.toThrow(/borrador manual/);
     await expect(acto(U.g2, "select public.marcar_registro($1, 'diario')", [p])).rejects.toThrow(/Primero va el borrador/);
     await expect(acto(U.g3, "select public.marcar_registro($1, 'borrador')", [p])).rejects.toThrow(/no es de tu empresa/);
     await acto(U.g1, "select public.marcar_registro($1, 'borrador')", [p]);
     await acto(U.g1, "select public.marcar_registro($1, 'diario')", [p]);
-    await expect(acto(U.g2, "select public.ordenar_pago($1, true)", [p])).rejects.toThrow(/borrador manual/);
+    await expect(acto(U.g2, "select public.ordenar_pago($1)", [p])).rejects.toThrow(/borrador manual/);
     await acto(U.g2, "select public.marcar_registro($1, 'borrador')", [p]);
     await acto(U.g2b, "select public.marcar_registro($1, 'diario')", [p]);
   });
-  it("si supera el 20 % de la tesorería hay que confirmar la comprobación", async () => {
-    await expect(acto(U.g2, "select public.ordenar_pago($1, false)", [p])).rejects.toThrow(/20 %/);
-    const [r] = await acto(U.g2, "select public.ordenar_pago($1, true) id", [p]);
+  it("al ordenar el pago el dinero se mueve solo: cargo, abono, comisión y un mismo justificante", async () => {
+    const [r] = await acto(U.g2, "select public.ordenar_pago($1) id", [p]);
     orden = Number(r.id);
-    const [d] = await acto(U.g2, "select public.disponible(2::smallint) d");
-    expect(Number(d.d)).toBe(27000 - 6025.8 - 1.5);
-    expect(await saldo(2)).toBe(27000);
-  });
-  it("el banco ve la orden; una empresa ajena, no", async () => {
-    const [o] = await acto(U.g5, "select num, concepto, importe, comision from public.ordenes_pago where id = $1", [orden]);
-    expect(o.num).toBe("OP2-0001");
-    expect(o.concepto).toBe("Pago factura F1-0001");
-    expect(Number(o.comision)).toBe(1.5);
-    expect(await acto(U.g3, "select * from public.ordenes_pago")).toHaveLength(0);
-    expect(await acto(U.g1, "select * from public.ordenes_pago where id = $1", [orden])).toHaveLength(1);
-    await expect(acto(U.g3, "select public.disponible(2::smallint)")).rejects.toThrow(/otra cuenta/);
-    await expect(acto(U.g2, "select public.ejecutar_orden($1)", [orden])).rejects.toThrow(/Solo el banco/);
-  });
-  it("al ejecutar: cargo, abono, comisión y un mismo justificante", async () => {
-    const [r] = await acto(U.g5, "select public.ejecutar_orden($1) j", [orden]);
-    expect(r.j).toBe("JB-0001");
     expect(await etapa(p)).toBe("pagado");
     expect(await saldo(2)).toBe(20972.7);
     expect(await saldo(1)).toBe(32025.8);
     expect(await saldo(5)).toBe(32001.5);
     const m = (await db.query<{ empresa_id: number; importe: string }>("select empresa_id, importe from public.movimientos_banco where justificante = 'JB-0001' order by id")).rows;
     expect(m.map((x) => [x.empresa_id, Number(x.importe)])).toEqual([[2, -6025.8], [1, 6025.8], [2, -1.5], [5, 1.5]]);
-    await expect(acto(U.g5, "select public.ejecutar_orden($1)", [orden])).rejects.toThrow(/ya está resuelta/);
+    await expect(acto(U.g2, "select public.ordenar_pago($1)", [p])).rejects.toThrow(/no está pendiente de pago/);
     expect(await acto(U.g3, "select * from public.movimientos_banco where justificante = 'JB-0001'")).toHaveLength(0);
+  });
+  it("el banco ve el pago y solo puede marcarlo como revisado; una empresa ajena no lo ve", async () => {
+    const [o] = await acto(U.g5, "select num, concepto, importe, comision, estado, justificante, revisado_en from public.ordenes_pago where id = $1", [orden]);
+    expect(o.num).toBe("OP2-0001");
+    expect(o.concepto).toBe("Pago factura F1-0001");
+    expect(Number(o.comision)).toBe(1.5);
+    expect(o.estado).toBe("ejecutada");
+    expect(o.justificante).toBe("JB-0001");
+    expect(o.revisado_en).toBe(null);
+    expect(await acto(U.g3, "select * from public.ordenes_pago")).toHaveLength(0);
+    expect(await acto(U.g1, "select * from public.ordenes_pago where id = $1", [orden])).toHaveLength(1);
+    await expect(acto(U.g3, "select public.disponible(2::smallint)")).rejects.toThrow(/otra cuenta/);
+    await expect(acto(U.g2, "select public.revisar_pago($1)", [orden])).rejects.toThrow(/Solo el banco/);
+    await acto(U.g5, "select public.revisar_pago($1)", [orden]);
+    const [v] = await acto(U.g2, "select revisado_nombre from public.ordenes_pago where id = $1", [orden]);
+    expect(v.revisado_nombre).toBe("Alumno g5");
+    await expect(acto(U.g5, "select public.revisar_pago($1)", [orden])).rejects.toThrow(/ya está revisado/);
+    expect(await saldo(2)).toBe(20972.7);
   });
 });
 
-describe("servicios y órdenes denegadas", () => {
-  it("el G4 no emite albarán, retiene IRPF y el comprador puede reordenar", async () => {
+describe("servicios y límites de pago", () => {
+  it("el G4 no emite albarán y retiene IRPF", async () => {
     const p = await pedir(U.g1, 4, [["Asesoría fiscal (mes)", 1]], null);
     await acto(U.g4, "select public.aceptar_pedido($1)", [p]);
     expect(await etapa(p)).toBe("recibido");
@@ -197,18 +197,14 @@ describe("servicios y órdenes denegadas", () => {
     await acto(U.g1, "select public.aceptar_factura($1, $2)", [p, LISTA]);
     await acto(U.g1, "select public.marcar_registro($1, 'borrador')", [p]);
     await acto(U.g1, "select public.marcar_registro($1, 'diario')", [p]);
-    const [o] = await acto(U.g1, "select public.ordenar_pago($1, false) id", [p]);
-    await expect(acto(U.g5, "select public.denegar_orden($1, '')", [o.id])).rejects.toThrow(/motivo/);
-    await acto(U.g5, "select public.denegar_orden($1, 'Orden duplicada')", [o.id]);
-    expect(await etapa(p)).toBe("orden_denegada");
-    await acto(U.g1, "select public.reordenar($1)", [p]);
-    const [o2] = await acto(U.g1, "select public.ordenar_pago($1, false) id", [p]);
-    expect(Number(o2.id)).not.toBe(Number(o.id));
+    await acto(U.g1, "select public.ordenar_pago($1) id", [p]);
+    expect(await etapa(p)).toBe("pagado");
     const nums = await acto(U.g1, "select num, estado from public.ordenes_pago where pedido_id = $1 order by id", [p]);
-    expect(nums.map((n) => n.num)).toEqual(["OP1-0001", "OP1-0002"]);
+    expect(nums.map((n) => [n.num, n.estado])).toEqual([["OP1-0001", "ejecutada"]]);
   });
   it("el descubierto está prohibido", async () => {
-    const p = await pedir(U.g6, 3, [["Estantería metálica 5 baldas", 150], ["Carro de almacén", 80]], 1);
+    await expect(pedir(U.g6, 3, [["Estantería metálica 5 baldas", 150], ["Carro de almacén", 80]], 1)).rejects.toThrow(/20 %/);
+    const p = await pedir(U.g6, 3, [["Estantería metálica 5 baldas", 150], ["Carro de almacén", 80]], 1, true);
     await acto(U.g3, "select public.aceptar_pedido($1)", [p]);
     await dia("2026-11-12");
     await acto(U.g3, "select public.emitir_albaran($1)", [p]);
@@ -217,7 +213,7 @@ describe("servicios y órdenes denegadas", () => {
     await acto(U.g6, "select public.aceptar_factura($1, $2)", [p, LISTA]);
     await acto(U.g6, "select public.marcar_registro($1, 'borrador')", [p]);
     await acto(U.g6, "select public.marcar_registro($1, 'diario')", [p]);
-    await expect(acto(U.g6, "select public.ordenar_pago($1, true)", [p])).rejects.toThrow(/descubierto/);
+    await expect(acto(U.g6, "select public.ordenar_pago($1)", [p])).rejects.toThrow(/descubierto/);
     expect(await etapa(p)).toBe("factura_aceptada");
   });
   it("solo se rechaza un pedido con los motivos de las normas", async () => {
@@ -259,7 +255,7 @@ describe("plazos y protocolo de bloqueo", () => {
 describe("permisos", () => {
   it("nadie escribe directamente en las tablas del circuito", async () => {
     await expect(acto(U.g2, "update public.pedidos set etapa = 'pagado'")).rejects.toThrow(/permission denied/);
-    await expect(acto(U.g5, "update public.ordenes_pago set estado = 'ejecutada'")).rejects.toThrow(/permission denied/);
+    await expect(acto(U.g5, "update public.ordenes_pago set revisado_nombre = 'x'")).rejects.toThrow(/permission denied/);
     await expect(acto(U.g2, "insert into public.historial (pedido_id, texto, fecha) values (1, 'x', '2026-11-09')")).rejects.toThrow(/permission denied/);
     await expect(acto(U.g2, "select * from public.contadores")).rejects.toThrow(/permission denied/);
   });
@@ -268,8 +264,8 @@ describe("permisos", () => {
     await expect(acto(U.g2, "select public._movimiento(2::smallint, 'x', 1000000, 'x')")).rejects.toThrow(/permission denied/);
   });
   it("solo el banco cambia la comisión, y cada empresa puntea solo lo suyo", async () => {
-    await expect(acto(U.g1, "select public.publicar_comision(0)")).rejects.toThrow(/Solo el banco/);
-    await acto(U.g5, "select public.publicar_comision(2)");
+    await expect(acto(U.g1, "select public.publicar_condiciones(0, 5, 48, null)")).rejects.toThrow(/Solo el banco/);
+    await acto(U.g5, "select public.publicar_condiciones(2, 5, 48, 'Sin otras comisiones')");
     const [c] = await acto(U.g1, "select comision_transferencia c from public.condiciones_banco order by vigente_desde desc, id desc limit 1");
     expect(Number(c.c)).toBe(2);
     const [m] = (await db.query<{ id: string }>("select id from public.movimientos_banco where empresa_id = 1 limit 1")).rows;

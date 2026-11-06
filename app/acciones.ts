@@ -1,9 +1,10 @@
 "use server";
 import { randomBytes } from "node:crypto";
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { admin, sb } from "@/lib/supabase";
-import { miSesion } from "@/lib/sesion";
+import { cuentaActual, firmanteDe, miSesion } from "@/lib/sesion";
 import type { Res } from "@/components/Form";
 
 const t = (f: FormData, k: string) => String(f.get(k) ?? "").trim();
@@ -25,12 +26,25 @@ export async function entrar(_: Res, f: FormData): Promise<Res> {
   const s = await sb();
   const { error } = await s.auth.signInWithPassword({ email: usuario + "@gad.local", password: String(f.get("clave") ?? "") });
   if (error) return { error: "Usuario o contraseña incorrectos." };
+  // Cada entrada con la cuenta del grupo vuelve a preguntar quién firma
+  (await cookies()).delete("firmante");
   redirect("/");
 }
 export async function salir() {
   const s = await sb();
   await s.auth.signOut();
+  (await cookies()).delete("firmante");
   redirect("/login");
+}
+export async function elegirFirmante(_: Res, f: FormData): Promise<Res> {
+  const cuenta = await cuentaActual();
+  if (!cuenta.cuenta_grupo) redirect("/");
+  const perfil = t(f, "perfil");
+  const s = await sb();
+  const { data } = await s.from("perfiles").select("id").eq("id", perfil).eq("empresa_id", cuenta.empresa_id!).eq("activo", true).eq("cuenta_grupo", false).maybeSingle();
+  if (!data) return { error: "Esa persona no es de tu grupo." };
+  (await cookies()).set("firmante", data.id, { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/" });
+  redirect("/");
 }
 export async function cambiarClave(_: Res, f: FormData): Promise<Res> {
   const nueva = String(f.get("nueva") ?? "");
@@ -48,7 +62,9 @@ export async function guardarNombre(_: Res, f: FormData) {
 }
 export async function guardarArticulo(_: Res, f: FormData) {
   const id = t(f, "id");
-  return rpc("guardar_catalogo", { p_empresa: Number(t(f, "empresa")), p_id: id || null, p_nombre: t(f, "nombre"), p_precio: num(t(f, "precio")) }, id ? "Artículo guardado." : "Artículo añadido.");
+  const yo = await miSesion();
+  const directo = yo.rol === "profesora";
+  return rpc("guardar_catalogo", { p_empresa: Number(t(f, "empresa")), p_id: id || null, p_nombre: t(f, "nombre"), p_coste: num(t(f, "coste")), p_margen: num(t(f, "margen") || "0") }, directo ? "Artículo guardado." : id ? "Guardado. Si el precio cambia, se aplicará cuando la profesora lo acepte." : "Enviado a la profesora: entrará en el catálogo cuando lo acepte.");
 }
 export async function quitarArticulo(_: Res, f: FormData) {
   return rpc("quitar_catalogo", { p_id: t(f, "id") }, "Quitado del catálogo.");
@@ -87,7 +103,9 @@ async function crearAlumno(nombre: string, empresa: number, por: string) {
   return { usuario, clave };
 }
 export async function altaIntegrante(_: Res, f: FormData): Promise<Res> {
-  const yo = await miSesion();
+  // Con la cuenta del grupo se puede dar de alta a alguien antes de haber elegido quién firma
+  const cuenta = await cuentaActual();
+  const yo = (cuenta.cuenta_grupo && (await firmanteDe(cuenta))) || cuenta;
   const empresa = Number(t(f, "empresa"));
   const nombre = t(f, "nombre");
   if (yo.rol !== "profesora" && yo.empresa_id !== empresa) return { error: "No puedes editar los datos de otro equipo" };

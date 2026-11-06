@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Form } from "@/components/Form";
 import type { Orden } from "@/components/Documentos";
-import { puntear } from "@/app/acciones-circuito";
+import { pagarEstado, puntear } from "@/app/acciones-circuito";
 import { miSesion } from "@/lib/sesion";
 import { sb } from "@/lib/supabase";
 import { fecha, fmt } from "@/lib/formato";
@@ -33,9 +33,19 @@ export default async function MiCuenta() {
       <div className="head"><h1>Mi cuenta bancaria</h1><p>Todos los cobros y pagos pasan por aquí; no se usa efectivo. IBAN <span className="mono">{e?.iban}</span></p></div>
       <div className="kpis">
         <div className="kpi"><span className="lbl">Saldo</span><span className="v">{fmt(saldo)}</span></div>
-        <div className="kpi"><span className="lbl">En órdenes pendientes</span><span className="v">{fmt(saldo - disponible)}</span></div>
+        {disponible > saldo && <div className="kpi"><span className="lbl">Descubierto autorizado</span><span className="v">{fmt(disponible - saldo)}</span></div>}
         <div className="kpi"><span className="lbl">Disponible</span><span className="v">{fmt(disponible)}</span></div>
       </div>
+      <section className="card"><h2>Pagar a Hacienda o a la Seguridad Social</h2>
+        <Form action={pagarEstado} boton="Pagar">
+          <div className="row3">
+            <label>Cuenta<select className="in" name="cuenta"><option value="8">Hacienda</option><option value="9">Seguridad Social</option></select></label>
+            <label>Concepto<input className="in" name="concepto" maxLength={150} placeholder="Por ejemplo, IVA de noviembre" required /></label>
+            <label>Importe €<input className="in" type="number" min="0.01" step="0.01" name="importe" required /></label>
+          </div>
+          <p className="hint">El dinero sale al momento, con la comisión de la transferencia, y el banco lo verá para marcarlo como revisado.</p>
+        </Form>
+      </section>
       <section className="card"><h2>Extracto y conciliación bancaria</h2>
         <div className="stack">
           <p className="hint">Comisión publicada por transferencia: {fmt(con?.comision_transferencia ?? 0)}. Marca cada movimiento que encuentres en tu mayor de la cuenta 572 del Excel.</p>
@@ -51,10 +61,10 @@ export default async function MiCuenta() {
           </tbody></table></div>
         </div>
       </section>
-      <section className="card"><h2>Mis órdenes de pago</h2>
-        {ordenes.length ? <div className="tw"><table className="t"><thead><tr><th>Orden</th><th>Beneficiario</th><th>Estado</th><th className="num">Importe</th></tr></thead><tbody>
-          {ordenes.map((o) => <tr key={o.id}><td><Link className="ref" href={"/operaciones/" + o.pedido_id}>{o.num}</Link></td><td>{corto(o.beneficiario_id)}</td><td><span className={"chip " + (o.estado === "ejecutada" ? "good" : o.estado === "denegada" ? "bad" : "warn")}>{o.estado === "ejecutada" ? "Ejecutada" : o.estado === "denegada" ? "Denegada" : "Pendiente"}</span></td><td className="num">{fmt(o.importe)}</td></tr>)}
-        </tbody></table></div> : <p className="empty">Sin órdenes de pago.</p>}
+      <section className="card"><h2>Mis pagos</h2>
+        {ordenes.length ? <div className="tw"><table className="t"><thead><tr><th>Orden</th><th>Beneficiario</th><th>Concepto</th><th>Banco</th><th className="num">Importe</th></tr></thead><tbody>
+          {ordenes.map((o) => <tr key={o.id}><td>{o.pedido_id ? <Link className="ref" href={"/operaciones/" + o.pedido_id}>{o.num}</Link> : <span className="ref">{o.num}</span>}</td><td>{corto(o.beneficiario_id)}</td><td>{o.concepto}</td><td>{o.estado === "ejecutada" ? <span className={"chip " + (o.revisado_en ? "good" : "off")}>{o.revisado_en ? "Revisado" : "Sin revisar"}</span> : <span className="chip bad">No ejecutada</span>}</td><td className="num">{fmt(o.importe)}</td></tr>)}
+        </tbody></table></div> : <p className="empty">Sin pagos.</p>}
       </section>
     </>
   );

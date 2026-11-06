@@ -13,7 +13,7 @@ export default async function Equipos({ searchParams }: { searchParams: Promise<
   const g = /^[1-6]$/.test(q.e ?? "") ? Number(q.e) : 1;
   const s = await sb();
   const [{ data: empresas }, { data: gente }] = await Promise.all([
-    s.from("empresas").select("id, corto, nombre").order("id"),
+    s.from("empresas").select("id, corto, nombre").eq("tipo", "grupo").order("id"),
     s.from("perfiles").select("*").eq("rol", "alumno").eq("activo", true).order("empresa_id").order("nombre"),
   ]);
   let log = s.from("registro_cambios").select("*, autor:perfiles(nombre)").order("creado_en", { ascending: false }).limit(100);
@@ -27,7 +27,7 @@ export default async function Equipos({ searchParams }: { searchParams: Promise<
         <div>{gente?.map((m) => (
           <div className="fila" key={m.id} style={{ gridTemplateColumns: "minmax(0,1fr) auto auto" }}>
             <span><strong>{m.nombre}</strong> <span className="mono muted">{m.usuario}</span></span>
-            <Form action={moverAlumno} boton="Mover" clase="btn ghost sm"><input type="hidden" name="perfil" value={m.id} /><select className="in" name="destino" defaultValue={m.empresa_id ?? 1} aria-label="Grupo">{empresas?.map((e) => <option key={e.id} value={e.id}>{e.corto}</option>)}</select></Form>
+            {m.cuenta_grupo ? <span className="chip off">Cuenta del grupo</span> : <Form action={moverAlumno} boton="Mover" clase="btn ghost sm"><input type="hidden" name="perfil" value={m.id} /><select className="in" name="destino" defaultValue={m.empresa_id ?? 1} aria-label="Grupo">{empresas?.map((e) => <option key={e.id} value={e.id}>{e.corto}</option>)}</select></Form>}
             <Form action={restablecerClave} boton="Restablecer contraseña" clase="btn ghost sm"><input type="hidden" name="perfil" value={m.id} /></Form>
           </div>))}</div>
       </section>

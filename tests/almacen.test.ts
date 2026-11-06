@@ -41,7 +41,7 @@ async function pedir(u: string, vendedor: number, lineas: [string, number][], di
     const c = await db.query<{ id: string }>("select id from public.catalogo where empresa_id = $1 and nombre = $2", [vendedor, n]);
     ls.push({ catalogo_id: c.rows[0].id, unidades });
   }
-  const [r] = await acto(u, "select public.crear_pedido($1::smallint, $2::jsonb, $3) id", [vendedor, JSON.stringify(ls), dias]);
+  const [r] = await acto(u, "select public.crear_pedido($1::smallint, $2::jsonb, $3, true) id", [vendedor, JSON.stringify(ls), dias]);
   return Number(r.id);
 }
 async function facturar(u: string, p: number, dto = 0, portes = 0, iva = 21) {
@@ -140,7 +140,7 @@ describe("casos numéricos obligatorios", () => {
   it("con la rectificativa pendiente no se puede ordenar el pago", async () => {
     await acto(U.g2, "select public.marcar_registro($1, 'borrador')", [p]);
     await acto(U.g2, "select public.marcar_registro($1, 'diario')", [p]);
-    await expect(acto(U.g2, "select public.ordenar_pago($1, true)", [p])).rejects.toThrow(/rectificativa pendiente/);
+    await expect(acto(U.g2, "select public.ordenar_pago($1)", [p])).rejects.toThrow(/rectificativa pendiente/);
   });
   it("aceptarla mueve los dos almacenes", async () => {
     await expect(acto(U.g1, "select public.aceptar_rectificativa($1)", [p])).rejects.toThrow(/Solo el receptor/);
@@ -157,12 +157,11 @@ describe("casos numéricos obligatorios", () => {
     expect(Number(fv[fv.length - 1].entrada_precio)).toBe(8);
   });
   it("a transferir 5.887,86 más 1,50 de comisión", async () => {
-    const [r] = await acto(U.g2, "select public.ordenar_pago($1, true) id", [p]);
+    const [r] = await acto(U.g2, "select public.ordenar_pago($1) id", [p]);
     o = Number(r.id);
     const [x] = await acto(U.g5, "select importe, comision from public.ordenes_pago where id = $1", [o]);
     expect(Number(x.importe)).toBe(5887.86);
     expect(Number(x.comision)).toBe(1.5);
-    await acto(U.g5, "select public.ejecutar_orden($1)", [o]);
     const s = await db.query<{ s: string }>("select saldo s from public.movimientos_banco where empresa_id = 2 order by id desc limit 1");
     expect(Number(s.rows[0].s)).toBe(21110.64);
   });

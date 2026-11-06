@@ -9,10 +9,10 @@ export type LineaFactura = { id: number; descripcion: string; unidades: number; 
 export type Opciones = { dto: number; rappel: number; pronto_pago: number; portes: number; envases: number; iva: number; retencion: number; vencimiento_dias: number };
 const INICIAL: Opciones = { dto: 0, rappel: 0, pronto_pago: 0, portes: 0, envases: 0, iva: 21, retencion: 0, vencimiento_dias: 15 };
 
-export function FacturaForm({ pedido, lineas, previa, g4 }: { pedido: number; lineas: LineaFactura[]; previa: Opciones | null; g4: boolean }) {
+export function FacturaForm({ pedido, lineas, previa, iniciales, g4 }: { pedido: number; lineas: LineaFactura[]; previa: Opciones | null; iniciales?: Partial<Opciones>; g4: boolean }) {
   const [ls, setLs] = useState(lineas.map((l) => ({ ...l, u: String(l.unidades), p: String(l.precio) })));
   const [o, setO] = useState<Record<keyof Opciones, string>>(() => {
-    const base = previa ?? INICIAL;
+    const base = previa ?? { ...INICIAL, ...iniciales };
     return Object.fromEntries(Object.entries(base).map(([k, v]) => [k, String(v)])) as Record<keyof Opciones, string>;
   });
   const c = calcularFactura(ls.map((l) => ({ unidades: Number(l.u) || 0, precio: Number(l.p) || 0 })), {
@@ -41,7 +41,7 @@ export function FacturaForm({ pedido, lineas, previa, g4 }: { pedido: number; li
         {campo("vencimiento_dias", "Vencimiento (0 = inmediato, o de 5 a 30 días)", "1")}
       </div>
       <dl className="dl"><dt>Base imponible</dt><dd>{fmt(c.base)}</dd><dt>Cuota IVA</dt><dd>{fmt(c.cuota)}</dd>{c.retImp ? <><dt>Retención</dt><dd>−{fmt(c.retImp)}</dd></> : null}<dt><strong>Total</strong></dt><dd><strong>{fmt(c.total)}</strong></dd></dl>
-      <p className="hint">Orden del Tema 3: descuentos sobre la suma, después portes y envases a la base, IVA y retención si procede. La app suma, pero no corrige: quien emite decide los datos y el cliente los revisa.</p>
+      <p className="hint">Orden del Tema 3: descuentos sobre la suma, después portes y envases a la base, IVA y retención si procede. La app suma, pero no corrige: quien emite decide los datos y el cliente los revisa. Pon portes solo si los cobras tú: si el transporte lo hace el G4, lo factura el G4. Los descuentos que se concedan después van en una rectificativa.</p>
     </Form>
   );
 }

@@ -11,7 +11,7 @@ export type Registro = { lado: string; paso: string; hecho_nombre: string };
 export type Bloqueo = { etapa: string; etapa_desde: string; comunicado_fecha: string | null; registrado: boolean };
 type Props = {
   p: Pedido; miEmpresa: number | null; hoy: string; factura?: Factura; registros: Registro[]; empresas: Empresa[]; comision: number; disponible: number | null; bloqueos: Bloqueo[]; lineas: Linea[];
-  rectificativas: Rectificativa[]; faltan: { descripcion: string; tienes: number; piden: number }[]; hayAlmacen: boolean; porVincular: { linea_id: number; descripcion: string }[]; misArticulos: { id: string; nombre: string }[]; deudas: Deuda[];
+  rectificativas: Rectificativa[]; faltan: { descripcion: string; tienes: number; piden: number }[]; hayAlmacen: boolean; porVincular: { linea_id: number; descripcion: string }[]; misArticulos: { id: string; nombre: string }[]; deudas: Deuda[]; ivaCatalogo: number; variosIva: boolean;
 };
 const Oculto = ({ p }: { p: Pedido }) => <input type="hidden" name="pedido" value={p.id} />;
 
@@ -38,12 +38,13 @@ function Bloqueos({ p, miEmpresa, hoy, bloqueos, empresas }: Pick<Props, "p" | "
   );
   if (miEmpresa === p.comprador_id) return b?.comunicado_fecha ? <div className="note info">Bloqueo comunicado a la profesora el {fecha(b.comunicado_fecha)}.{b.registrado ? " Incumplimiento registrado." : ""}</div> : (
     <div className="stack"><div className="note bad">{resp} no ha llegado a {textoPlazo(p)} (límite {lim}).</div>
+      <p className="hint">Primero reclámalo por escrito con <Link href={"/correo/nuevo?para=" + gestor(p) + "&pedido=" + p.id}>un correo de esta operación</Link>. Si no responden, comunícalo a la profesora.</p>
       <Form action={A.comunicarBloqueo} boton="Comunicar bloqueo a la profesora" clase="btn danger"><Oculto p={p} /></Form></div>
   );
   return <div className="note bad">Plazo vencido el {lim}. {b?.comunicado_fecha ? "El otro equipo ya lo ha comunicado a la profesora." : ""}</div>;
 }
 
-function Paso({ p, miEmpresa, hoy, factura, registros, empresas, comision, disponible, lineas, rectificativas, faltan, hayAlmacen, porVincular, misArticulos }: Props) {
+function Paso({ p, miEmpresa, hoy, factura, registros, empresas, comision, disponible, lineas, rectificativas, faltan, hayAlmacen, porVincular, misArticulos, ivaCatalogo, variosIva }: Props) {
   const avisoFaltan = faltan.length > 0 ? "No tienes existencias suficientes de: " + faltan.map((l) => l.descripcion + " (tienes " + l.tienes + ", piden " + l.piden + ")").join("; ") + "." : "";
   const actor = actorDe(p, hoy);
   const nombre = (g: number | null) => empresas.find((e) => e.id === g)?.corto;
@@ -76,7 +77,7 @@ function Paso({ p, miEmpresa, hoy, factura, registros, empresas, comision, dispo
         </div>
       );
     case "albaran_emitido":
-      return <div className="stack"><p className="hint">Comprueba que lo recibido coincide con el albarán.</p><Form action={A.confirmarRecepcion} boton="Confirmar recepción"><Oculto p={p} />{porVincular.map((l) => <label key={l.linea_id}>{l.descripcion}: artículo en tu almacén<select className="in" name={"vinculo_" + l.linea_id} defaultValue=""><option value="">Crear un artículo nuevo</option>{misArticulos.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}</select></label>)}</Form></div>;
+      return <div className="stack"><p className="hint">Comprueba que lo recibido coincide con el albarán.</p><Form action={A.confirmarRecepcion} boton="Confirmar recepción"><Oculto p={p} />{porVincular.map((l) => <label key={l.linea_id}>{l.descripcion}: artículo en tu almacén<select className="in" name={"vinculo_" + l.linea_id} defaultValue=""><option value="">Crear un artículo nuevo</option>{misArticulos.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}</select></label>)}</Form><details className="ver"><summary>Rechazar el albarán</summary><Form action={A.rechazarAlbaran} boton="Rechazar" clase="btn danger"><Oculto p={p} /><label>Motivo<select className="in" name="motivo">{MOTIVOS_PEDIDO.map((x) => <option key={x}>{x}</option>)}</select></label><p className="hint">Las unidades vuelven al proveedor, que tiene un día lectivo para reemitirlo.</p></Form></details></div>;
     case "recibido":
     case "factura_rechazada": {
       const previa = p.etapa === "factura_rechazada" ? factura : undefined;
@@ -87,7 +88,7 @@ function Paso({ p, miEmpresa, hoy, factura, registros, empresas, comision, dispo
       const opciones = previa ? { dto: Number(previa.dto), rappel: Number(previa.rappel), pronto_pago: Number(previa.pronto_pago), portes: Number(previa.portes), envases: Number(previa.envases), iva: Number(previa.iva), retencion: Number(previa.retencion), vencimiento_dias: previa.vencimiento_dias } : null;
       const pactado = !previa && Number(p.dto_pactado) + Number(p.rappel_pactado) + Number(p.pronto_pago_pactado) > 0;
       const iniciales = pactado ? { dto: Number(p.dto_pactado), rappel: Number(p.rappel_pactado), pronto_pago: Number(p.pronto_pago_pactado) } : undefined;
-      return <div className="stack">{previa && <div className="note bad">Rechazada por el cliente: {previa.motivo_rechazo}</div>}{pactado && <div className="note info">Los descuentos vienen rellenos con lo negociado en el presupuesto.</div>}<FacturaForm pedido={p.id} lineas={ls} previa={opciones} iniciales={iniciales} g4={p.vendedor_id === 4} /></div>;
+      return <div className="stack">{previa && <div className="note bad">Rechazada por el cliente: {previa.motivo_rechazo}</div>}{variosIva && <div className="note warn">Las líneas tienen tipos de IVA distintos en el catálogo. Una factura lleva un solo tipo: revisa cuál corresponde.</div>}{pactado && <div className="note info">Los descuentos vienen rellenos con lo negociado en el presupuesto.</div>}<FacturaForm pedido={p.id} lineas={ls} previa={opciones} iniciales={{ iva: ivaCatalogo, ...iniciales }} g4={p.vendedor_id === 4} /></div>;
     }
     case "factura_emitida":
       return (

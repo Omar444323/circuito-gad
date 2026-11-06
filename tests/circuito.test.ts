@@ -241,6 +241,7 @@ describe("plazos y protocolo de bloqueo", () => {
     await expect(acto(U.g3, "select public.comunicar_bloqueo($1)", [p])).rejects.toThrow(/no ha vencido/);
     await dia("2026-11-12");
     await expect(acto(U.g2, "select public.comunicar_bloqueo($1)", [p])).rejects.toThrow(/equipo afectado/);
+    await acto(U.g3, "select public.enviar_correo(2::smallint, 'Pedido sin respuesta', 'Reclamo la respuesta', null, $1)", [p]);
     await acto(U.g3, "select public.comunicar_bloqueo($1)", [p]);
     await expect(acto(U.g3, "select public.comunicar_bloqueo($1)", [p])).rejects.toThrow(/ya está comunicado/);
     await expect(acto(U.g3, "select public.registrar_incumplimiento($1)", [p])).rejects.toThrow(/no actúa|Solo la profesora/);

@@ -166,6 +166,8 @@ describe("dejarlo a deber", () => {
     await expect(acto(U.g1, "select public.comunicar_impago($1)", [x])).rejects.toThrow(/no ha vencido/);
     await dia("2026-11-20");
     await expect(acto(U.g2, "select public.comunicar_impago($1)", [x])).rejects.toThrow(/acreedor/);
+    await expect(acto(U.g1, "select public.comunicar_impago($1)", [x])).rejects.toThrow(/por escrito/);
+    await acto(U.g1, "select public.enviar_correo(2::smallint, 'Deuda vencida', 'Reclamo el pago', null, $1)", [q]);
     await acto(U.g1, "select public.comunicar_impago($1)", [x]);
     await acto(U.prof, "select public.registrar_impago($1)", [x]);
     const { rows } = await db.query<{ responsable_id: number; afectada_id: number }>("select responsable_id, afectada_id from public.incumplimientos where deuda_id = $1", [x]);

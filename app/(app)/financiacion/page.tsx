@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { CuadroCuotas, type Cuota } from "@/components/CuadroCuotas";
 import { Form } from "@/components/Form";
 import { estudiarFinanciacion, presentarPlan, solicitarFinanciacion } from "@/app/acciones-circuito";
 import { MOTIVOS_PEDIDO } from "@/lib/circuito";
@@ -6,7 +7,7 @@ import { miSesion } from "@/lib/sesion";
 import { sb } from "@/lib/supabase";
 import { fecha, fmt } from "@/lib/formato";
 
-type Solicitud = { id: number; empresa_id: number; importe: number; plazo_meses: number; motivo: string; fecha: string; estado: string; tipo_interes: number | null; motivo_rechazo: string | null; rechazada_por: string | null; justificante: string | null; solicito_nombre: string; plazo_financiacion: string | null };
+type Solicitud = { perfil_id: string | null; solicito_nombre: string; cuotas_prestamo: Cuota[]; id: number; empresa_id: number; importe: number; plazo_meses: number; motivo: string; fecha: string; estado: string; tipo_interes: number | null; motivo_rechazo: string | null; rechazada_por: string | null; justificante: string | null; solicito_nombre: string; plazo_financiacion: string | null };
 type Plan = { id: number; importe_solicitado: number; fecha: string; estado: string; importe_aprobado: number | null; condiciones: string | null; justificante: string | null };
 const ESTADOS: Record<string, [string, string]> = { solicitada: ["En el banco", "info"], estudiada: ["Con la profesora", "warn"], autorizada: ["Autorizada y abonada", "good"], rechazada: ["Rechazada", "bad"] };
 const PLANES: Record<string, [string, string]> = { presentado: ["Con la profesora", "warn"], aprobado: ["Aprobado", "good"], rechazado: ["Rechazado", "bad"] };
@@ -18,14 +19,15 @@ export default async function Financiacion() {
   const banco = yo.empresa_id === 5;
   const s = await sb();
   const [{ data: sol }, { data: pla }, { data: emp }, { data: mod }, { data: con }, { data: hoy }] = await Promise.all([
-    s.from("solicitudes_financiacion").select("*, plazo_financiacion").order("id", { ascending: false }),
+    s.from("solicitudes_financiacion").select("*, plazo_financiacion, cuotas_prestamo(*)").order("id", { ascending: false }),
     s.from("planes_viabilidad").select("*").eq("empresa_id", yo.empresa_id!).order("id", { ascending: false }),
     s.from("empresas").select("id, corto"),
     s.from("modulos").select("activo").eq("clave", "financiacion").maybeSingle(),
     s.from("condiciones_banco").select("tipo_interes, plazo_max_meses").order("vigente_desde", { ascending: false }).order("id", { ascending: false }).limit(1).maybeSingle(),
     s.rpc("hoy"),
   ]);
-  const solicitudes = (sol ?? []) as unknown as Solicitud[];
+  // Los préstamos personales se ven en Mis finanzas; el banco los ve aquí con el nombre de quien pide
+  const solicitudes = ((sol ?? []) as unknown as Solicitud[]).filter((x) => banco || !x.perfil_id);
   const planes = (pla ?? []) as unknown as Plan[];
   const corto = (g: number) => emp?.find((e) => e.id === g)?.corto ?? "";
   const pendientes = solicitudes.filter((x) => x.estado === "solicitada");
@@ -61,9 +63,14 @@ export default async function Financiacion() {
       )}
       <section className="card"><h2>{banco ? "Todas las solicitudes" : "Mis solicitudes"}</h2>
         {solicitudes.length ? <div className="tw"><table className="t"><thead><tr>{banco && <th>Empresa</th>}<th>Fecha</th><th className="num">Importe</th><th className="num">Meses</th><th className="num">Tipo</th><th>Estado</th></tr></thead><tbody>
-          {solicitudes.map((x) => <tr key={x.id}>{banco && <td>{corto(x.empresa_id)}</td>}<td className="mono">{fecha(x.fecha)}</td><td className="num">{fmt(x.importe)}</td><td className="num">{x.plazo_meses}</td><td className="num">{pc(x.tipo_interes)}</td><td>{chip(ESTADOS[x.estado] as [string, string])}{x.motivo_rechazo && <span className="muted"> {x.rechazada_por}: {x.motivo_rechazo}</span>}{x.justificante && <span className="mono muted"> {x.justificante}</span>}</td></tr>)}
+          {solicitudes.map((x) => <tr key={x.id}>{banco && <td>{corto(x.empresa_id)}{x.perfil_id && <span className="muted"> · personal: {x.solicito_nombre}</span>}</td>}<td className="mono">{fecha(x.fecha)}</td><td className="num">{fmt(x.importe)}</td><td className="num">{x.plazo_meses}</td><td className="num">{pc(x.tipo_interes)}</td><td>{chip(ESTADOS[x.estado] as [string, string])}{x.motivo_rechazo && <span className="muted"> {x.rechazada_por}: {x.motivo_rechazo}</span>}{x.justificante && <span className="mono muted"> {x.justificante}</span>}</td></tr>)}
         </tbody></table></div> : <p className="empty">Sin solicitudes.</p>}
       </section>
+      {solicitudes.some((x) => x.cuotas_prestamo.length > 0) && (
+        <section className="card"><h2>Cuadros de cuotas</h2>
+          <div className="stack">{solicitudes.filter((x) => x.cuotas_prestamo.length > 0).map((x) => <div key={x.id}><p><strong>{banco ? corto(x.empresa_id) + (x.perfil_id ? " · " + x.solicito_nombre : "") + " · " : ""}{fmt(x.importe)} a {x.plazo_meses} meses al {pc(x.tipo_interes)}</strong></p><CuadroCuotas cuotas={x.cuotas_prestamo} puedePagar={!banco} /></div>)}</div>
+        </section>
+      )}
       <section className="card"><h2>Plan de viabilidad</h2>
         <div className="stack">
           <p className="hint">Si la empresa queda insolvente, las normas piden un plan con reducción de gastos, revisión de precios y financiación. La profesora decide si hay rescate del Estado.</p>

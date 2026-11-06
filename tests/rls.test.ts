@@ -56,8 +56,8 @@ describe("visibilidad", () => {
     expect(await como(U.prof, "select * from public.articulos")).toHaveLength(12);
   });
   it("catálogos y empresas los ven todos; las recetas solo el G2 y la profesora", async () => {
-    expect(await como(U.g3a, "select * from public.catalogo")).toHaveLength(13);
-    expect(await como(U.g3a, "select * from public.empresas")).toHaveLength(6);
+    expect(await como(U.g3a, "select * from public.catalogo")).toHaveLength(20);
+    expect(await como(U.g3a, "select * from public.empresas")).toHaveLength(9);
     expect(await como(U.g3a, "select * from public.recetas")).toHaveLength(0);
     expect(await como(U.g2a, "select * from public.recetas_lineas")).toHaveLength(5);
   });

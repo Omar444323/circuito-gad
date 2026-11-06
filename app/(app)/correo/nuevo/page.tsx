@@ -10,7 +10,7 @@ export default async function Nuevo({ searchParams }: { searchParams: Promise<{ 
   const yo = await miSesion();
   if (!yo.empresa_id) redirect("/correo");
   const s = await sb();
-  const { data: empresas } = await s.from("empresas").select("id, corto, nombre").order("id");
+  const { data: empresas } = await s.from("empresas").select("id, corto, nombre").eq("tipo", "grupo").order("id");
   const destinos = (empresas ?? []).filter((e) => e.id !== yo.empresa_id);
   const { data: pedido } = pedidoQ && /^\d+$/.test(pedidoQ) ? await s.from("pedidos").select("id, num, comprador_id, vendedor_id").eq("id", pedidoQ).maybeSingle() : { data: null };
   // Si es sobre una operación, la destinataria es siempre la otra parte

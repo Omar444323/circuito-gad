@@ -2,12 +2,13 @@ import Link from "next/link";
 import { miSesion } from "@/lib/sesion";
 import { sb } from "@/lib/supabase";
 import { fecha } from "@/lib/formato";
-import { actorDe, type Pedido } from "@/lib/circuito";
+import { actorDe, turnoPresupuesto, type Pedido, type Presupuesto } from "@/lib/circuito";
 import { salir } from "../acciones";
 import "../circuito.css";
 
 type Entrada = [string, string, number?];
 type BloqueoAbierto = { etapa: string; etapa_desde: string; pedidos: { etapa: string; etapa_desde: string } | null };
+const contar = { count: "exact", head: true } as const;
 
 export default async function Layout({ children }: { children: React.ReactNode }) {
   const yo = await miSesion();
@@ -19,22 +20,36 @@ export default async function Layout({ children }: { children: React.ReactNode }
   const hoy = hoyR as string;
   let nav: Entrada[];
   if (yo.rol === "profesora") {
-    const { data } = await s.from("bloqueos").select("etapa, etapa_desde, pedidos(etapa, etapa_desde)").eq("registrado", false);
+    const [{ data }, { count: precios }, { count: prestamos }, { count: planes }, { count: entregas }] = await Promise.all([
+      s.from("bloqueos").select("etapa, etapa_desde, pedidos(etapa, etapa_desde)").eq("registrado", false),
+      s.from("solicitudes_precio").select("id", contar).eq("estado", "pendiente"),
+      s.from("solicitudes_financiacion").select("id", contar).eq("estado", "estudiada"),
+      s.from("planes_viabilidad").select("id", contar).eq("estado", "presentado"),
+      s.from("entregas").select("id", contar).is("revisada_en", null),
+    ]);
     const abiertos = ((data ?? []) as unknown as BloqueoAbierto[]).filter((b) => b.pedidos?.etapa === b.etapa && b.pedidos?.etapa_desde === b.etapa_desde).length;
-    nav = [["/", "Panel de control", abiertos], ["/operaciones", "Operaciones"], ["/correo", "Todos los correos"], ["/existencias", "Existencias"], ["/condiciones", "Condiciones del banco"], ["/equipos", "Equipos y usuarios"], ["/calendario", "Calendario lectivo"]];
+    nav = [["/", "Panel de control", abiertos], ["/operaciones", "Operaciones"], ["/presupuestos", "Presupuestos"], ["/correo", "Todos los correos"], ["/circulares", "Circulares y entregas", entregas ?? 0], ["/autorizaciones", "Autorizaciones", (precios ?? 0) + (prestamos ?? 0) + (planes ?? 0)], ["/existencias", "Existencias"], ["/condiciones", "Condiciones del banco"], ["/equipos", "Equipos y usuarios"], ["/calendario", "Calendario lectivo"]];
   } else {
-    const [{ data }, { count: sinLeer }] = await Promise.all([
+    const [{ data }, { data: pres }, { count: sinLeer }, { count: circulares }, { count: leidas }] = await Promise.all([
       s.from("pedidos").select("*"),
-      s.from("correos").select("id", { count: "exact", head: true }).eq("destinatario_id", yo.empresa_id!).is("leido_en", null),
+      s.from("presupuestos").select("estado, comprador_id, vendedor_id"),
+      s.from("correos").select("id", contar).eq("destinatario_id", yo.empresa_id!).is("leido_en", null),
+      s.from("circulares").select("id", contar),
+      s.from("circular_lecturas").select("circular_id", contar).eq("empresa_id", yo.empresa_id!),
     ]);
     const tocan = ((data ?? []) as unknown as Pedido[]).filter((p) => actorDe(p, hoy) === yo.empresa_id).length;
+    const presupuestos: Entrada = ["/presupuestos", "Presupuestos", ((pres ?? []) as unknown as Presupuesto[]).filter((p) => turnoPresupuesto(p) === yo.empresa_id).length];
     const correo: Entrada = ["/correo", "Correo", sinLeer ?? 0];
+    const avisos: Entrada = ["/circulares", "Circulares y entregas", Math.max((circulares ?? 0) - (leidas ?? 0), 0)];
     if (yo.empresa_id === 5) {
-      const { count } = await s.from("ordenes_pago").select("id", { count: "exact", head: true }).eq("estado", "pendiente");
-      nav = [["/", "Inicio"], ["/ordenes", "Órdenes de pago", count ?? 0], ["/condiciones", "Condiciones y cálculo"], ["/operaciones", "Mis operaciones", tocan], correo, ["/operaciones/nuevo", "Nuevo pedido"], ["/mi-cuenta", "Mi cuenta"], ["/mi-empresa", "Mi empresa"]];
+      const [{ count: sinRevisar }, { count: solicitudes }] = await Promise.all([
+        s.from("ordenes_pago").select("id", contar).eq("estado", "ejecutada").is("revisado_en", null),
+        s.from("solicitudes_financiacion").select("id", contar).eq("estado", "solicitada"),
+      ]);
+      nav = [["/", "Inicio"], ["/ordenes", "Pagos por revisar", sinRevisar ?? 0], ["/financiacion", "Financiación", solicitudes ?? 0], ["/condiciones", "Condiciones y cálculo"], ["/operaciones", "Mis operaciones", tocan], presupuestos, correo, avisos, ["/operaciones/nuevo", "Nuevo pedido"], ["/mi-cuenta", "Mi cuenta"], ["/mi-empresa", "Mi empresa"]];
     } else {
       const almacen: Entrada[] = yo.empresa_id === 4 ? [] : [["/almacen", yo.empresa_id === 2 ? "Almacén y fabricación" : yo.empresa_id === 6 ? "Almacén y tienda" : "Almacén"]];
-      nav = [["/", "Inicio"], ["/operaciones", "Operaciones", tocan], correo, ["/operaciones/nuevo", "Nuevo pedido"], ...almacen, ["/mi-cuenta", "Mi cuenta"], ["/condiciones", "Condiciones del banco"], ["/mi-empresa", "Mi empresa"]];
+      nav = [["/", "Inicio"], ["/operaciones", "Operaciones", tocan], presupuestos, correo, avisos, ["/operaciones/nuevo", "Nuevo pedido"], ...almacen, ["/mi-cuenta", "Mi cuenta"], ["/financiacion", "Financiación"], ["/condiciones", "Condiciones del banco"], ["/mi-empresa", "Mi empresa"]];
     }
   }
   return (
@@ -43,7 +58,7 @@ export default async function Layout({ children }: { children: React.ReactNode }
         <div className="brand">Circuito <span>GAD</span></div>
         <div className="today">{fecha(hoy)}</div>
         <div className="who">
-          <div style={{ textAlign: "right" }}><span className="lbl">{yo.nombre}</span><strong>{e?.nombre ?? "Estado · Profesora"}</strong></div>
+          <div style={{ textAlign: "right" }}><span className="lbl">{yo.nombre}{yo.compartida && <> · <Link href="/quien-soy">Cambiar</Link></>}</span><strong>{e?.nombre ?? "Estado · Profesora"}</strong></div>
           <form action={salir}><button className="btn ghost sm">Salir</button></form>
         </div>
       </header>

@@ -8,7 +8,10 @@ const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string;
 
 export async function sb() {
   const c = await cookies();
+  // Con una cuenta compartida, la base de datos solo acepta como firmante a alguien de ese mismo grupo
+  const firmante = c.get("firmante")?.value;
   return createServerClient(url, anon, {
+    global: firmante ? { headers: { "x-firmante": firmante } } : undefined,
     cookies: {
       getAll: () => c.getAll(),
       setAll: (l) => {

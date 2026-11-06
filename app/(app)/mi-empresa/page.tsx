@@ -11,6 +11,7 @@ export default async function MiEmpresa() {
     <>
       <div className="head"><h1>Mi empresa</h1><p>Cualquier integrante del equipo puede cambiar estos datos. Cada cambio queda registrado y la profesora lo ve.</p></div>
       <EquipoEditor empresa={yo.empresa_id} />
+      {yo.compartida && <p className="hint">Has entrado con la cuenta del grupo: cambiar la contraseña la cambia para todo el grupo.</p>}
       <section className="card"><h2>Mi contraseña</h2><Form action={cambiarClave} boton="Cambiar contraseña" clase="btn ghost"><label>Contraseña nueva (mínimo 8 caracteres)<input className="in" name="nueva" type="password" autoComplete="new-password" minLength={8} required /></label></Form></section>
     </>
   );

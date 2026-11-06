@@ -14,10 +14,18 @@ export type Pedido = {
   elaboro_nombre: string;
   reviso_nombre: string | null;
   plazo_limite: string | null;
+  dto_pactado: number;
+  rappel_pactado: number;
+  pronto_pago_pactado: number;
+  envio_de: number | null;
+  presupuesto_id: number | null;
 };
 
+// Las compras al Estado las gestiona el propio G1: hace y recibe los documentos, y paga a la cuenta 7
+export const gestor = (p: Pick<Pedido, "vendedor_id">) => (p.vendedor_id === 7 ? 1 : p.vendedor_id);
+
 type Color = "info" | "good" | "warn" | "bad" | "off";
-export const ETAPAS: Record<string, { etiqueta: string; color: Color; actor: "v" | "c" | "b" | null; paso: string }> = {
+export const ETAPAS: Record<string, { etiqueta: string; color: Color; actor: "v" | "c" | null; paso: string }> = {
   pedido_enviado: { etiqueta: "Pedido enviado", color: "info", actor: "v", paso: "Aceptar o rechazar el pedido" },
   pedido_rechazado: { etiqueta: "Pedido rechazado", color: "bad", actor: null, paso: "" },
   pedido_aceptado: { etiqueta: "Entrega hoy", color: "warn", actor: "v", paso: "Entregar la mercancía y emitir el albarán" },
@@ -26,8 +34,6 @@ export const ETAPAS: Record<string, { etiqueta: string; color: Color; actor: "v"
   factura_emitida: { etiqueta: "Factura en revisión", color: "warn", actor: "c", paso: "Revisar la factura" },
   factura_rechazada: { etiqueta: "Factura rechazada", color: "bad", actor: "v", paso: "Emitir la factura corregida" },
   factura_aceptada: { etiqueta: "Pendiente de pago", color: "warn", actor: "c", paso: "Hacer borrador y diario, y ordenar el pago" },
-  orden_pendiente: { etiqueta: "Orden en el banco", color: "warn", actor: "b", paso: "Ejecutar la orden de pago" },
-  orden_denegada: { etiqueta: "Orden denegada", color: "bad", actor: "c", paso: "Revisar la denegación y volver a ordenar" },
   pagado: { etiqueta: "Pagada", color: "good", actor: null, paso: "" },
 };
 
@@ -39,7 +45,7 @@ export const enCamino = (p: Pedido, hoy: string) => p.etapa === "pedido_aceptado
 export function actorDe(p: Pedido, hoy: string): number | null {
   if (enCamino(p, hoy)) return null;
   const a = ETAPAS[p.etapa]?.actor;
-  return a === "v" ? p.vendedor_id : a === "c" ? p.comprador_id : a === "b" ? 5 : null;
+  return a === "v" ? gestor(p) : a === "c" ? p.comprador_id : null;
 }
 
 export function chipEtapa(p: Pedido, hoy: string): { texto: string; color: Color } {
@@ -67,7 +73,20 @@ export function textoPlazo(p: Pedido) {
 }
 
 export const MOTIVOS_PEDIDO = ["Falta de existencias", "Falta de liquidez", "Precio no aceptado", "Riesgo excesivo", "Documento incorrecto", "Incumplimiento previo"];
-export const MOTIVOS_ORDEN = ["Saldo insuficiente", "Datos del beneficiario incorrectos", "Orden duplicada"];
+
+export type Presupuesto = {
+  id: number; num: string; comprador_id: number; vendedor_id: number; servicio: boolean; fecha: string; entrega_dias: number | null; estado: string; estado_desde: string;
+  dto: number; rappel: number; pronto_pago: number; motivo_rechazo: string | null; pedido_id: number | null; incumplimiento_desde: string | null; elaboro_nombre: string; plazo_presupuesto: string | null;
+};
+export const ESTADOS_PRESUPUESTO: Record<string, { etiqueta: string; color: Color }> = {
+  solicitado: { etiqueta: "Solicitado", color: "info" },
+  ofertado: { etiqueta: "Oferta recibida", color: "warn" },
+  contraoferta: { etiqueta: "Contraoferta", color: "warn" },
+  aceptado: { etiqueta: "Aceptado", color: "good" },
+  rechazado: { etiqueta: "Rechazado", color: "bad" },
+};
+// A quién le toca responder al presupuesto
+export const turnoPresupuesto = (p: Pick<Presupuesto, "estado" | "comprador_id" | "vendedor_id">) => (p.estado === "ofertado" ? p.comprador_id : p.estado === "solicitado" || p.estado === "contraoferta" ? p.vendedor_id : null);
 export const COMPROBACIONES: [string, string][] = [
   ["numeracion", "Numeración y fecha"],
   ["partes", "Emisor y destinatario"],

@@ -17,7 +17,7 @@ export default async function Bandeja({ searchParams }: { searchParams: Promise<
   const s = await sb();
   let consulta = s.from("correos").select("id, hilo_id, remitente_id, destinatario_id, asunto, cuerpo, autor_nombre, enviado_en, leido_en").order("id", { ascending: false }).limit(LIMITE);
   if (empresa) consulta = consulta.or(`remitente_id.eq.${empresa},destinatario_id.eq.${empresa}`);
-  const [{ data }, { data: empresas }] = await Promise.all([consulta, s.from("empresas").select("id, corto").order("id")]);
+  const [{ data }, { data: empresas }] = await Promise.all([consulta, s.from("empresas").select("id, corto").eq("tipo", "grupo").order("id")]);
   const corto = (g: number) => empresas?.find((e) => e.id === g)?.corto ?? "";
   const filas = (data ?? []) as unknown as Correo[];
 

@@ -16,7 +16,7 @@ const contar = { count: "exact", head: true } as const;
 export default async function Inicio() {
   const yo = await miSesion();
   const s = await sb();
-  const [{ data: emp }, { data: movs }, { data: modulos }, { data: hoyR }, { data: filas }, { data: blo }, { data: inc }, { data: ajustes }, { count: precios }, { count: prestamos }, { count: planes }, { data: pres }, { data: circ }, { data: entr }] = await Promise.all([
+  const [{ data: emp }, { data: movs }, { data: modulos }, { data: hoyR }, { data: filas }, { data: blo }, { data: inc }, { data: ajustes }, { count: precios }, { count: prestamos }, { count: planes }, { data: pres }, { data: circ }, { data: entr }, { data: deu }] = await Promise.all([
     s.from("empresas").select("*").order("id"),
     s.from("movimientos_banco").select("empresa_id, saldo, id").order("id"),
     s.from("modulos").select("*").order("nombre"),
@@ -31,6 +31,7 @@ export default async function Inicio() {
     s.from("presupuestos").select("*, plazo_presupuesto"),
     s.from("circulares").select("id, titulo, fecha_limite").not("fecha_limite", "is", null).order("fecha_limite"),
     s.from("entregas").select("circular_id, empresa_id"),
+    s.from("deudas").select("deudor_id, acreedor_id, pendiente, vencimiento").eq("estado", "vigente"),
   ]);
   const hoy = hoyR as string;
   const empresas = (emp ?? []) as unknown as Empresa[];
@@ -46,6 +47,9 @@ export default async function Inicio() {
   const vencidos = pedidos.filter((p) => vencido(p, hoy) && p.vendedor_id <= 6);
   const presVencidos = ((pres ?? []) as unknown as Presupuesto[]).filter((p) => p.plazo_presupuesto && hoy > p.plazo_presupuesto && p.incumplimiento_desde !== p.estado_desde);
   const porEntregar = yo.empresa_id ? (circ ?? []).filter((c) => !entr?.some((x) => x.circular_id === c.id && x.empresa_id === yo.empresa_id)) : [];
+  const debes = (deu ?? []).filter((d) => d.deudor_id === yo.empresa_id).reduce((a, d) => a + Number(d.pendiente), 0);
+  const teDeben = (deu ?? []).filter((d) => d.acreedor_id === yo.empresa_id).reduce((a, d) => a + Number(d.pendiente), 0);
+  const deudasVencidas = (deu ?? []).filter((d) => d.vencimiento && hoy > d.vencimiento).length;
   const porAutorizar = (precios ?? 0) + (prestamos ?? 0) + (planes ?? 0);
   const enApuros = (e: Empresa) => Number(e.saldo_inicial) > 0 && saldo(e.id) <= Number(e.saldo_inicial) * 0.1;
   const estadoPlazo = (p: Pedido) => {
@@ -61,9 +65,9 @@ export default async function Inicio() {
   return (
     <>
       <div className="head"><h1>{mia ? mia.corto : "Panel de control"}</h1><p>{mia ? mia.nombre + " · " + mia.actividad : "Vista del Estado: revisas plazos, incidencias, precios y entregas. Los grupos hacen las operaciones."}</p></div>
-      {mia && <div className="kpis"><div className="kpi"><span className="lbl">Saldo en banco</span><span className="v">{fmt(saldo(mia.id))}</span></div><div className="kpi"><span className="lbl">Te toca actuar</span><span className="v">{tocan.length}</span></div></div>}
+      {mia && <div className="kpis"><div className="kpi"><span className="lbl">Saldo en banco</span><span className="v">{fmt(saldo(mia.id))}</span></div><div className="kpi"><span className="lbl">Te toca actuar</span><span className="v">{tocan.length}</span></div>{debes > 0 && <div className="kpi"><span className="lbl">Debes</span><span className="v">{fmt(debes)}</span></div>}{teDeben > 0 && <div className="kpi"><span className="lbl">Te deben</span><span className="v">{fmt(teDeben)}</span></div>}</div>}
       {mia && enApuros(mia) && <div className="note bad">Vuestro saldo está por debajo del 10 % del inicial. Si no podéis hacer frente a los pagos, presentad un <Link href="/financiacion">plan de viabilidad</Link> a la profesora.</div>}
-      {prof && <div className="kpis"><div className="kpi"><span className="lbl">Plazos vencidos</span><span className="v">{vencidos.length + presVencidos.length}</span></div><div className="kpi"><span className="lbl">Por autorizar</span><span className="v">{porAutorizar}</span></div><div className="kpi"><span className="lbl">Incumplimientos</span><span className="v">{incumplimientos.length}</span></div></div>}
+      {prof && <div className="kpis"><div className="kpi"><span className="lbl">Plazos vencidos</span><span className="v">{vencidos.length + presVencidos.length}</span></div><div className="kpi"><span className="lbl">Por autorizar</span><span className="v">{porAutorizar}</span></div><div className="kpi"><span className="lbl">Incumplimientos</span><span className="v">{incumplimientos.length}</span></div><div className="kpi"><span className="lbl">Deudas vencidas</span><span className="v">{deudasVencidas}</span></div></div>}
       {prof && porAutorizar > 0 && <div className="note warn">Tienes {porAutorizar} {porAutorizar === 1 ? "asunto" : "asuntos"} por resolver en <Link href="/autorizaciones">Autorizaciones</Link>.</div>}
       {mia && tocan.length > 0 && (
         <section className="card"><h2>Te toca actuar</h2>

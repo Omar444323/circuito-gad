@@ -1,16 +1,17 @@
+import Link from "next/link";
 import { Form } from "./Form";
 import { FacturaForm, type LineaFactura } from "./FacturaForm";
 import { RevisionFactura } from "./RevisionFactura";
 import { TIPOS_RECTIFICATIVA, type Empresa, type Factura, type Linea, type Rectificativa } from "./Documentos";
 import * as A from "@/app/acciones-circuito";
-import { actorDe, enCamino, ETAPAS, gestor, MOTIVOS_PEDIDO, posicion, textoPlazo, vencido, type Pedido } from "@/lib/circuito";
+import { actorDe, deudaVencida, enCamino, ETAPAS, gestor, MOTIVOS_PEDIDO, posicion, textoPlazo, vencido, type Deuda, type Pedido } from "@/lib/circuito";
 import { fecha, fmt } from "@/lib/formato";
 
 export type Registro = { lado: string; paso: string; hecho_nombre: string };
 export type Bloqueo = { etapa: string; etapa_desde: string; comunicado_fecha: string | null; registrado: boolean };
 type Props = {
   p: Pedido; miEmpresa: number | null; hoy: string; factura?: Factura; registros: Registro[]; empresas: Empresa[]; comision: number; disponible: number | null; bloqueos: Bloqueo[]; lineas: Linea[];
-  rectificativas: Rectificativa[]; faltan: { descripcion: string; tienes: number; piden: number }[]; hayAlmacen: boolean; porVincular: { linea_id: number; descripcion: string }[]; misArticulos: { id: string; nombre: string }[];
+  rectificativas: Rectificativa[]; faltan: { descripcion: string; tienes: number; piden: number }[]; hayAlmacen: boolean; porVincular: { linea_id: number; descripcion: string }[]; misArticulos: { id: string; nombre: string }[]; deudas: Deuda[];
 };
 const Oculto = ({ p }: { p: Pedido }) => <input type="hidden" name="pedido" value={p.id} />;
 
@@ -120,18 +121,48 @@ function Paso({ p, miEmpresa, hoy, factura, registros, empresas, comision, dispo
 }
 
 function FormRectificativa({ p, factura }: { p: Pedido; factura: Factura }) {
-  const tipos = Object.entries(TIPOS_RECTIFICATIVA).filter(([k]) => !p.servicio || k !== "devolucion");
+  const pagada = p.etapa === "pagado";
+  const tipos = Object.entries(TIPOS_RECTIFICATIVA).filter(([k]) => k !== "devolucion" || (!p.servicio && !pagada));
   return (
-    <details className="ver"><summary>Emitir factura rectificativa</summary>
+    <details className="ver"><summary>{pagada ? "Conceder un descuento fuera de factura" : "Emitir factura rectificativa"}</summary>
       <Form action={A.emitirRectificativa} boton="Emitir rectificativa" clase="btn ghost"><Oculto p={p} />
         <label>Tipo<select className="in" name="tipo">{tipos.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></label>
-        {!p.servicio && <div className="tw"><table className="t"><thead><tr><th>Unidades devueltas</th><th className="num">Uds</th></tr></thead><tbody>
+        {!p.servicio && !pagada && <div className="tw"><table className="t"><thead><tr><th>Unidades devueltas</th><th className="num">Uds</th></tr></thead><tbody>
           {factura.factura_lineas.map((l) => <tr key={l.id}><td>{l.descripcion} <span className="muted">({Number(l.unidades)} uds)</span></td><td><input className="in num" type="number" min="0" step="1" name={"ru_" + l.pedido_linea_id} defaultValue="0" aria-label="Unidades devueltas" /></td></tr>)}
         </tbody></table></div>}
         <label>Base del descuento (comercial, rappel o pronto pago) €<input className="in" type="number" min="0" step="0.01" name="base" defaultValue="0" /></label>
-        <p className="hint">Solo antes del pago. La devolución mueve existencias en los dos almacenes cuando el cliente la acepta. IVA de la factura original.</p>
+        <p className="hint">{pagada ? "La factura ya está pagada: cuando el cliente la acepte, le deberás ese importe y lo verás en Deudas." : p.etapa === "a_deber" ? "Cuando el cliente la acepte, reducirá lo que te debe." : "La devolución mueve existencias en los dos almacenes cuando el cliente la acepta."} IVA de la factura original. Para el rappel por volumen mensual, usa <Link href="/deudas">Deudas</Link>.</p>
       </Form>
     </details>
+  );
+}
+
+// Dejar a deber: lo propone cualquiera de las dos partes y lo acepta la otra
+function DejarADeber({ p, miEmpresa, deudas }: Pick<Props, "p" | "miEmpresa" | "deudas">) {
+  const abierta = deudas.find((d) => d.origen === "compra" && d.estado === "propuesta");
+  if (p.etapa !== "factura_aceptada" || p.vendedor_id > 6 || !miEmpresa) return null;
+  if (abierta) return <div className="note info">Propuesta de dejarla a deber a {abierta.vencimiento_dias} días, de {abierta.propuso_nombre}. {abierta.propuso_empresa === miEmpresa ? "Esperando respuesta de la otra parte." : <Link href="/deudas">Responder en Deudas</Link>}</div>;
+  return (
+    <details className="ver"><summary>{miEmpresa === p.comprador_id ? "Dejarlo a deber" : "Ofrecer que quede a deber"}</summary>
+      <Form action={A.proponerDeuda} boton="Enviar la propuesta" clase="btn ghost"><Oculto p={p} />
+        <label>Vencimiento en días lectivos (5 a 30)<input className="in" type="number" min="5" max="30" name="dias" defaultValue="15" required /></label>
+        <label>Condiciones acordadas (opcional)<textarea className="in" name="condiciones" maxLength={1000} placeholder="Por ejemplo, pago en dos plazos" /></label>
+        <p className="hint">La otra parte tiene que aceptarla. Mientras se deba se puede pagar por partes y aplicar descuentos fuera de factura.</p>
+      </Form>
+    </details>
+  );
+}
+
+function ADeber({ p, miEmpresa, hoy, deudas, registros }: Props) {
+  const d = deudas.find((x) => x.origen === "compra" && x.estado === "vigente");
+  if (!d) return null;
+  const faltan = miEmpresa === p.comprador_id && registros.filter((r) => r.lado === "comprador").length < 2;
+  return (
+    <div className="stack">
+      <div className={"note " + (deudaVencida(d, hoy) ? "bad" : "warn")}>Factura a deber. Quedan {fmt(d.pendiente)} de {fmt(d.importe)}. {deudaVencida(d, hoy) ? "Venció" : "Vence"} el {fecha(d.vencimiento as string)}.</div>
+      {faltan && <div className="stack"><p>Antes de pagar, deja constancia de los pasos 5 y 6 del circuito.</p><Registros p={p} lado="comprador" registros={registros} /></div>}
+      {miEmpresa && <Link className="btn ghost" href="/deudas" style={{ alignSelf: "flex-start", textDecoration: "none" }}>Ir a Deudas</Link>}
+    </div>
   );
 }
 
@@ -153,8 +184,9 @@ export function AccionesPedido(props: Props) {
       <Bloqueos {...props} />
       {venta && <div className="stack"><p><strong>Tu registro de la venta</strong> <span className="hint">(no bloquea el circuito)</span></p><Registros p={p} lado="vendedor" registros={registros} /></div>}
       {pendiente && miEmpresa === gestor(p) && <div className="note info">Rectificativa {pendiente.num} pendiente de revisión por el cliente.</div>}
-      {!pendiente && miEmpresa === gestor(p) && p.etapa === "factura_aceptada" && factura && <FormRectificativa p={p} factura={factura} />}
-      <Paso {...props} />
+      {!pendiente && miEmpresa === gestor(p) && factura && (p.etapa === "factura_aceptada" || p.etapa === "a_deber" || (p.etapa === "pagado" && p.vendedor_id <= 6)) && <FormRectificativa p={p} factura={factura} />}
+      <DejarADeber p={p} miEmpresa={miEmpresa} deudas={props.deudas} />
+      {p.etapa === "a_deber" ? <ADeber {...props} /> : <Paso {...props} />}
     </div>
   );
 }

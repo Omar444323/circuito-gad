@@ -33,6 +33,35 @@ export async function crearPedido(_: Res, f: FormData): Promise<Res> {
   revalidatePath("/", "layout");
   redirect("/operaciones/" + data);
 }
+export async function proponerDeuda(_: Res, f: FormData) {
+  return rpc("proponer_deuda", { p_pedido: id(f), p_dias: Number(t(f, "dias")), p_condiciones: t(f, "condiciones") || null }, "Propuesta enviada a la otra parte.");
+}
+export async function responderDeuda(_: Res, f: FormData) {
+  const aceptar = t(f, "aceptar") === "true";
+  return rpc("responder_deuda", { p_id: id(f, "deuda"), p_aceptar: aceptar, p_motivo: t(f, "motivo") || null }, aceptar ? "Deuda aceptada." : "Deuda rechazada.");
+}
+export async function aplazarDeuda(_: Res, f: FormData) {
+  return rpc("aplazar_deuda", { p_id: id(f, "deuda"), p_dias: Number(t(f, "dias")) }, "Vencimiento aplazado.");
+}
+export async function pagarDeuda(_: Res, f: FormData) {
+  return rpc("pagar_deuda", { p_id: id(f, "deuda"), p_importe: num(t(f, "importe")) }, "Pago realizado.");
+}
+export async function comunicarImpago(_: Res, f: FormData) {
+  return rpc("comunicar_impago", { p_id: id(f, "deuda") }, "Impago comunicado a la profesora.");
+}
+export async function registrarImpago(_: Res, f: FormData) {
+  return rpc("registrar_impago", { p_id: id(f, "deuda") }, "Incumplimiento registrado.");
+}
+export async function guardarTramoRappel(_: Res, f: FormData) {
+  const c = t(f, "comprador");
+  return rpc("guardar_tramo_rappel", { p_comprador: c ? Number(c) : null, p_volumen: num(t(f, "volumen")), p_porcentaje: num(t(f, "porcentaje")) }, "Tramo publicado.");
+}
+export async function quitarTramoRappel(_: Res, f: FormData) {
+  return rpc("quitar_tramo_rappel", { p_id: id(f, "tramo") }, "Tramo quitado.");
+}
+export async function emitirRappelVolumen(_: Res, f: FormData) {
+  return rpc("emitir_rappel_volumen", { p_pedido: id(f), p_mes: t(f, "mes") }, "Rappel emitido. El cliente tiene que aceptar la rectificativa.");
+}
 export async function contratarEnvio(_: Res, f: FormData) {
   return rpc("contratar_envio", { p_pedido: id(f), p_catalogo: t(f, "envio_catalogo"), p_unidades: num(t(f, "envio_unidades") || "1") }, "Envío contratado con el G4.");
 }

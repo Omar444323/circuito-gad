@@ -7,7 +7,7 @@ import { DocAlbaran, DocFactura, DocJustificante, DocPedido, DocRectificativa, t
 import { miSesion } from "@/lib/sesion";
 import { sb } from "@/lib/supabase";
 import { fecha } from "@/lib/formato";
-import { chipEtapa, chipPlazo, ETAPAS, posicion, type Pedido } from "@/lib/circuito";
+import { chipEtapa, chipPlazo, ETAPAS, posicion, type Deuda, type Pedido } from "@/lib/circuito";
 
 const SinAcceso = () => (
   <><Link className="btn ghost sm" href="/operaciones" style={{ alignSelf: "flex-start", textDecoration: "none" }}>← Operaciones</Link>
@@ -39,6 +39,7 @@ export default async function Operacion({ params }: { params: Promise<{ id: stri
     s.from("catalogo").select("id, nombre, precio").eq("empresa_id", 4).eq("activo", true).eq("es_transporte", true).order("nombre"),
     p.presupuesto_id ? s.from("presupuestos").select("id, num").eq("id", p.presupuesto_id).maybeSingle() : Promise.resolve({ data: null }),
   ]);
+  const { data: deu } = await s.from("deudas").select("*").eq("pedido_id", id).order("id", { ascending: false });
   const envio = env.data as { id: number; num: string; etapa: string } | null;
   const puedeContratar = !envio && yo.empresa_id === p.comprador_id && !p.servicio && p.comprador_id !== 4 && p.etapa !== "pedido_rechazado" && p.etapa !== "pagado";
   const hoy = hoyR.data as string;
@@ -54,7 +55,8 @@ export default async function Operacion({ params }: { params: Promise<{ id: stri
   const comprador = empresa(p.comprador_id);
   const vendedor = empresa(p.vendedor_id);
   const factura = facturas[0];
-  const pagada = ordenes.find((o) => o.estado === "ejecutada");
+  // Una deuda se puede pagar en varias veces, y un abono lo paga el vendedor
+  const pagos = ordenes.filter((o) => o.estado === "ejecutada");
   const disp = yo.empresa_id === p.comprador_id ? await s.rpc("disponible", { p_empresa: p.comprador_id }) : null;
   let faltan: { descripcion: string; tienes: number; piden: number }[] = [];
   if (yo.empresa_id === p.vendedor_id && vendedor?.con_almacen && (p.etapa === "pedido_enviado" || p.etapa === "pedido_aceptado")) {
@@ -82,7 +84,7 @@ export default async function Operacion({ params }: { params: Promise<{ id: stri
     ["Emisión y revisión de la factura", clase(i >= posicion("factura_aceptada"), p.etapa === "recibido" || p.etapa === "factura_emitida", p.etapa === "factura_rechazada")],
     ["Borrador manual del comprador", clase(hecho("comprador", "borrador"), p.etapa === "factura_aceptada")],
     ["Registro en el diario de Excel", clase(hecho("comprador", "diario"), p.etapa === "factura_aceptada" && hecho("comprador", "borrador"))],
-    ["Pago por el banco (automático)", clase(p.etapa === "pagado", false)],
+    [p.etapa === "a_deber" ? "Pago por el banco (factura a deber)" : "Pago por el banco (automático)", clase(p.etapa === "pagado", p.etapa === "a_deber")],
     ["Justificante bancario emitido y archivado", clase(p.etapa === "pagado", false)],
   ];
   return (
@@ -93,7 +95,7 @@ export default async function Operacion({ params }: { params: Promise<{ id: stri
         <div className="btns" style={{ marginTop: 8 }}><span className={"chip " + e.color}>{e.texto}</span>{pl && <span className={"chip " + pl.color}>{pl.texto}</span>}{pre.data && <Link className="btn ghost sm" href={"/presupuestos/" + pre.data.id} style={{ textDecoration: "none" }}>Presupuesto {pre.data.num}</Link>}{yo.empresa_id && p.vendedor_id <= 6 && <Link className="btn ghost sm" href={"/correo/nuevo?para=" + otra + "&pedido=" + p.id} style={{ textDecoration: "none" }}>Escribir sobre esta operación</Link>}</div></div>
       <div className="grid2">
         <div className="stack">
-          {pagada && <DocJustificante o={pagada} ordenante={comprador} beneficiario={vendedor} />}
+          {pagos.map((o) => <DocJustificante key={o.id} o={o} ordenante={empresa(o.ordenante_id)} beneficiario={empresa(o.beneficiario_id)} />)}
           {factura && rectificativas.map((r) => <DocRectificativa key={r.id} r={r} facturaNum={factura.num} comprador={comprador} vendedor={vendedor} />)}
           {factura && <DocFactura f={factura} varias={facturas.length > 1} comprador={comprador} vendedor={vendedor} />}
           {facturas.length > 1 && <details className="ver"><summary>Versiones anteriores ({facturas.length - 1})</summary><div className="stack">{facturas.slice(1).map((f) => <DocFactura key={f.id} f={f} varias antigua comprador={comprador} vendedor={vendedor} />)}</div></details>}
@@ -102,7 +104,7 @@ export default async function Operacion({ params }: { params: Promise<{ id: stri
         </div>
         <div className="stack">
           <section className="card"><h3>Siguiente paso</h3>
-            <AccionesPedido p={p} miEmpresa={yo.empresa_id} hoy={hoy} factura={factura} registros={registros} empresas={empresas} comision={Number(con.data?.comision_transferencia ?? 0)} disponible={disp ? Number(disp.data) : null} bloqueos={(blo.data ?? []) as unknown as Bloqueo[]} lineas={lineas} rectificativas={rectificativas} faltan={faltan} hayAlmacen={!!vendedor?.con_almacen} porVincular={porVincular} misArticulos={misArticulos} />
+            <AccionesPedido p={p} miEmpresa={yo.empresa_id} hoy={hoy} factura={factura} registros={registros} empresas={empresas} comision={Number(con.data?.comision_transferencia ?? 0)} disponible={disp ? Number(disp.data) : null} bloqueos={(blo.data ?? []) as unknown as Bloqueo[]} lineas={lineas} rectificativas={rectificativas} faltan={faltan} hayAlmacen={!!vendedor?.con_almacen} porVincular={porVincular} misArticulos={misArticulos} deudas={(deu ?? []) as unknown as Deuda[]} />
           </section>
           {(envio || puedeContratar || p.envio_de) && (
             <section className="card"><h3>Gastos de envío</h3>

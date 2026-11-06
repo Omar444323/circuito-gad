@@ -1,4 +1,4 @@
-﻿import { PGlite } from "@electric-sql/pglite";
+import { PGlite } from "@electric-sql/pglite";
 import { readFileSync, readdirSync } from "node:fs";
 import { beforeAll, describe, expect, it } from "vitest";
 import { aCsv, aXlsx, leerCsv, nombreHoja, type Hoja } from "../lib/exportar";

@@ -34,8 +34,21 @@ export const ETAPAS: Record<string, { etiqueta: string; color: Color; actor: "v"
   factura_emitida: { etiqueta: "Factura en revisión", color: "warn", actor: "c", paso: "Revisar la factura" },
   factura_rechazada: { etiqueta: "Factura rechazada", color: "bad", actor: "v", paso: "Emitir la factura corregida" },
   factura_aceptada: { etiqueta: "Pendiente de pago", color: "warn", actor: "c", paso: "Hacer borrador y diario, y ordenar el pago" },
+  a_deber: { etiqueta: "A deber", color: "warn", actor: null, paso: "" },
   pagado: { etiqueta: "Pagada", color: "good", actor: null, paso: "" },
 };
+
+export type Deuda = {
+  id: number; num: string; origen: "compra" | "abono"; pedido_id: number; deudor_id: number; acreedor_id: number; fecha: string; vencimiento_dias: number; vencimiento: string | null; condiciones: string | null;
+  importe: number; pendiente: number; estado: "propuesta" | "vigente" | "saldada" | "rechazada"; propuso_empresa: number; propuso_nombre: string; respondio_nombre: string | null; motivo_rechazo: string | null; impago_comunicado: string | null; impago_registrado: boolean;
+};
+export const ESTADOS_DEUDA: Record<Deuda["estado"], { etiqueta: string; color: Color }> = {
+  propuesta: { etiqueta: "Propuesta", color: "info" },
+  vigente: { etiqueta: "Vigente", color: "warn" },
+  saldada: { etiqueta: "Saldada", color: "good" },
+  rechazada: { etiqueta: "Rechazada", color: "bad" },
+};
+export const deudaVencida = (d: Pick<Deuda, "estado" | "vencimiento">, hoy: string) => d.estado === "vigente" && !!d.vencimiento && hoy > d.vencimiento;
 
 const ORDEN = Object.keys(ETAPAS);
 export const posicion = (etapa: string) => ORDEN.indexOf(etapa);

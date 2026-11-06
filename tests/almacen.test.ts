@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- filas sin tipar de la base de datos */
 import { PGlite } from "@electric-sql/pglite";
 import { readFileSync, readdirSync } from "node:fs";
 import { beforeAll, describe, expect, it } from "vitest";
@@ -165,8 +166,8 @@ describe("casos numéricos obligatorios", () => {
     const s = await db.query<{ s: string }>("select saldo s from public.movimientos_banco where empresa_id = 2 order by id desc limit 1");
     expect(Number(s.rows[0].s)).toBe(21110.64);
   });
-  it("tras el pago ya no se emiten rectificativas", async () => {
-    await expect(acto(U.g1, "select public.emitir_rectificativa($1, 'rappel', null, 50)", [p])).rejects.toThrow(/antes del pago/);
+  it("tras el pago ya no se admiten devoluciones", async () => {
+    await expect(acto(U.g1, "select public.emitir_rectificativa($1, 'devolucion', '[]'::jsonb, null)", [p])).rejects.toThrow(/antes del pago/);
   });
 });
 
